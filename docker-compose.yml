@@ -1,0 +1,76 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: pqrsf_db
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-pqrsf_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: unless-stopped
+
+  api-pqrsf:
+    build:
+      context: ./api-pqrsf
+    container_name: pqrsf_api
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-pqrsf_db}
+      - JWT_SECRET=${JWT_SECRET:-supersecretkey}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  ia-classifier:
+    build:
+      context: ./ia-classifier
+    container_name: pqrsf_ia
+    ports:
+      - "8001:8001"
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - USE_MOCK=${USE_MOCK:-True}
+    restart: unless-stopped
+
+  email-listener:
+    build:
+      context: ./email-listener
+    container_name: pqrsf_email_listener
+    environment:
+      - IMAP_SERVER=${IMAP_SERVER:-imap.gmail.com}
+      - IMAP_USER=${IMAP_USER:-pqrsf@ikusi.com}
+      - IMAP_PASSWORD=${IMAP_PASSWORD:-password}
+      - SMTP_SERVER=${SMTP_SERVER:-smtp.gmail.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - API_URL=http://api-pqrsf:8000
+      - IA_URL=http://ia-classifier:8001
+    volumes:
+      - pqrsf_attachments:/app/attachments
+    depends_on:
+      - api-pqrsf
+      - ia-classifier
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: pqrsf_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - api-pqrsf
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  pqrsf_attachments:

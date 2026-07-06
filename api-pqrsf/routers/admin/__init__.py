@@ -1,0 +1,25 @@
+from fastapi import APIRouter
+from . import customers, contacts, users, areas, architectures, types, priorities, states, workflow, sla, rules, integrations, dashboard, permissions, causes, categories, sentiments, parameters, management_systems, processes
+
+router = APIRouter()
+
+router.include_router(customers.router, prefix="/customers", tags=["Admin - Customers"])
+router.include_router(contacts.router, prefix="/contacts", tags=["Admin - Contacts"])
+router.include_router(users.router, prefix="/users", tags=["Admin - Users"])
+router.include_router(areas.router, prefix="/areas", tags=["Admin - Areas"])
+router.include_router(architectures.router, prefix="/architectures", tags=["Admin - Architectures"])
+router.include_router(types.router, prefix="/types", tags=["Admin - Types"])
+router.include_router(priorities.router, prefix="/priorities", tags=["Admin - Priorities"])
+router.include_router(states.router, prefix="/states", tags=["Admin - States"])
+router.include_router(workflow.router, prefix="/workflow", tags=["Admin - Workflow"])
+router.include_router(sla.router, prefix="/sla", tags=["Admin - SLA"])
+router.include_router(rules.router, prefix="/rules", tags=["Admin - Rules"])
+router.include_router(integrations.router, prefix="/integrations", tags=["Admin - Integrations"])
+router.include_router(dashboard.router, prefix="/dashboard", tags=["Admin - Dashboard"])
+router.include_router(permissions.router, prefix="/permissions", tags=["Admin - Permissions"])
+router.include_router(causes.router, prefix="/causes", tags=["Admin - Causes"])
+router.include_router(categories.router, prefix="/categories", tags=["Admin - Categories"])
+router.include_router(sentiments.router, prefix="/sentiments", tags=["Admin - Sentiments"])
+router.include_router(parameters.router, prefix="/parameters", tags=["Admin - Parameters"])
+router.include_router(management_systems.router, prefix="/management-systems", tags=["Admin - Management Systems"])
+router.include_router(processes.router, prefix="/processes", tags=["Admin - Processes"])
