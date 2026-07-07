@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { api } from '@/services/api';
+import Link from 'next/link';
 
 export default function NuevaSolicitudPage() {
   const [formData, setFormData] = useState({
@@ -47,6 +48,13 @@ export default function NuevaSolicitudPage() {
   const [success, setSuccess] = useState('');
   
   const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    document.body.classList.add('light-theme');
+    return () => {
+      document.body.classList.remove('light-theme');
+    };
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -150,22 +158,25 @@ export default function NuevaSolicitudPage() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', padding: '40px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+    <div className="light-theme" style={{ minHeight: '100vh', padding: '40px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', backgroundColor: 'var(--bg-color)', color: 'var(--text-primary)' }}>
       <div style={{ maxWidth: '1200px', width: '100%' }}>
+        <Link href="/portal-cliente" style={{ display: 'inline-flex', alignItems: 'center', color: 'var(--primary)', textDecoration: 'none', marginBottom: 24, fontWeight: 600 }}>
+          ← Volver al Dashboard
+        </Link>
         <h1 className="page-title" style={{ textAlign: 'center', marginBottom: 8 }}>Nueva Solicitud</h1>
         <p style={{ textAlign: 'center', color: 'var(--text-secondary)', marginBottom: 40 }}>
           SABI Voice analizará automáticamente la información registrada y propondrá una clasificación inteligente basada en Inteligencia Artificial.
         </p>
 
         {success && (
-          <div className="glass-panel" style={{ background: 'rgba(16, 185, 129, 0.1)', borderColor: 'var(--status-closed)', color: 'var(--status-closed)', marginBottom: 24, textAlign: 'center' }}>
+          <div className="saas-card" style={{ background: 'rgba(16, 185, 129, 0.1)', borderColor: 'var(--status-closed)', color: 'var(--status-closed)', marginBottom: 24, textAlign: 'center' }}>
             <strong>{success}</strong>
           </div>
         )}
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px' }}>
           {/* Formulario Principal */}
-          <div className="glass-panel">
+          <div className="saas-card">
             <h2 style={{ marginBottom: 24, fontSize: 20 }}>Datos de la Solicitud</h2>
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               
@@ -173,7 +184,7 @@ export default function NuevaSolicitudPage() {
                 <label style={{ display: 'block', marginBottom: 8, fontSize: 14 }}>Cliente / Empresa *</label>
                 {selectedCustomer ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div className="input-field" style={{ flex: 1, background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center' }}>
+                    <div className="input-field" style={{ flex: 1, backgroundColor: '#f1f5f9', display: 'flex', alignItems: 'center' }}>
                       {selectedCustomer.name}
                     </div>
                     <button type="button" onClick={() => { setSelectedCustomer(null); setCustomerSearch(''); }} className="btn-primary" style={{ padding: '8px', background: 'var(--status-danger)' }}>X</button>
@@ -190,9 +201,9 @@ export default function NuevaSolicitudPage() {
                       placeholder="Empieza a escribir (Mín 3 caracteres)..." 
                     />
                     {showCustomers && customers.length > 0 && (
-                      <ul style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', marginTop: '4px', padding: 0, listStyle: 'none', zIndex: 10, maxHeight: '200px', overflowY: 'auto' }}>
+                      <ul style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--surface-color)', border: '1px solid var(--surface-border)', borderRadius: '8px', marginTop: '4px', padding: 0, listStyle: 'none', zIndex: 10, maxHeight: '200px', overflowY: 'auto', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
                         {customers.map((c) => (
-                          <li key={c.id} style={{ padding: '12px 16px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.05)' }} 
+                          <li key={c.id} style={{ padding: '12px 16px', cursor: 'pointer', borderBottom: '1px solid var(--surface-border)' }} 
                               onClick={() => { setSelectedCustomer(c); setShowCustomers(false); }}>
                             {c.name}
                           </li>
@@ -232,7 +243,7 @@ export default function NuevaSolicitudPage() {
                 <textarea required name="descripcion" value={formData.descripcion} onChange={handleChange} className="input-field" rows={8} placeholder="Describe detalladamente el motivo de la solicitud..." style={{ resize: 'vertical' }}></textarea>
               </div>
               
-              <div style={{ border: '1px dashed var(--surface-border)', padding: 24, borderRadius: 8, textAlign: 'center', background: 'rgba(0,0,0,0.1)' }}>
+              <div style={{ border: '1px dashed var(--surface-border)', padding: 24, borderRadius: 8, textAlign: 'center', backgroundColor: '#f8fafc' }}>
                 <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>Arrastra archivos aquí o haz clic para subir (Max 20MB)</p>
                 <p style={{ color: 'var(--status-warning)', fontSize: 12, marginTop: 8 }}>* Funcionalidad visual para MVP</p>
               </div>
@@ -244,18 +255,18 @@ export default function NuevaSolicitudPage() {
           </div>
 
           {/* Panel de IA */}
-          <div className="glass-panel" style={{ background: 'linear-gradient(180deg, rgba(30, 41, 59, 0.7) 0%, rgba(59, 130, 246, 0.05) 100%)' }}>
+          <div className="saas-card" style={{ borderTop: '4px solid var(--primary)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-              <h2 style={{ fontSize: 20, color: 'var(--accent-color)' }}>Sugerencias IA</h2>
+              <h2 style={{ fontSize: 20, color: 'var(--text-primary)' }}>Sugerencias IA</h2>
               {isClassifying && <span className="badge status-aldia">Analizando...</span>}
             </div>
 
             {aiData.clasificacion_ia?.hallazgos && aiData.clasificacion_ia.hallazgos.length > 0 && (
-              <div style={{ marginBottom: 24, padding: 16, background: 'rgba(255,255,255,0.05)', borderRadius: 8 }}>
-                <h3 style={{ fontSize: 16, color: '#f59e0b', marginBottom: 12 }}>Hallazgos Organizacionales Sugeridos</h3>
+              <div style={{ marginBottom: 24, padding: 16, backgroundColor: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 8 }}>
+                <h3 style={{ fontSize: 16, color: '#d97706', marginBottom: 12 }}>Hallazgos Organizacionales Sugeridos</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {aiData.clasificacion_ia.hallazgos.map((h: any, idx: number) => (
-                    <div key={idx} style={{ padding: 12, background: 'rgba(0,0,0,0.2)', borderRadius: 6, borderLeft: '4px solid #f59e0b' }}>
+                    <div key={idx} style={{ padding: 12, backgroundColor: '#ffffff', borderRadius: 6, borderLeft: '4px solid #f59e0b', boxShadow: '0 1px 2px 0 rgba(0,0,0,0.05)' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                         <span style={{ fontWeight: 600, fontSize: 14 }}>{h.tipo}</span>
                         <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Confianza: {(h.confianza * 100).toFixed(0)}%</span>

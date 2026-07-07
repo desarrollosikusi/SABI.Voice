@@ -57,6 +57,20 @@ export const api = {
     });
   },
 
+  getCustomerMe: async () => {
+    return await customFetch(`${API_URL}/portal/me`, {
+      headers: getHeaders(),
+    });
+  },
+
+  updateCustomerMe: async (data: any) => {
+    return await customFetch(`${API_URL}/portal/me`, {
+      method: "PUT",
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    });
+  },
+
   getExecutiveSummary: async () => {
     return await customFetch(`${API_URL}/dashboard/executive-summary`, {
       headers: getHeaders(),
@@ -85,6 +99,26 @@ export const api = {
   getPqrsfById: async (id: string | number) => {
     return await customFetch(`${API_URL}/pqrsf/${id}`, {
       headers: getHeaders(),
+    });
+  },
+
+  getCustomerPqrsfById: async (id: string | number) => {
+    return await customFetch(`${API_URL}/portal/pqrsf/${id}`, {
+      headers: getHeaders(),
+    });
+  },
+
+  getCustomerPqrsfCommunications: async (id: string | number) => {
+    return await customFetch(`${API_URL}/portal/pqrsf/${id}/communications`, {
+      headers: getHeaders(),
+    });
+  },
+
+  createCustomerCommunication: async (id: string | number, mensaje: string) => {
+    return await customFetch(`${API_URL}/portal/pqrsf/${id}/communications`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ mensaje })
     });
   },
 
@@ -117,6 +151,37 @@ export const api = {
     return resp.json();
   },
 
+  getAdminCustomers: async (filters: any = {}) => {
+    const params = new URLSearchParams();
+    if (filters.search) params.append('search', filters.search);
+    if (filters.sector) params.append('sector', filters.sector);
+    if (filters.pm_id) params.append('pm_id', filters.pm_id);
+    if (filters.sdm_id) params.append('sdm_id', filters.sdm_id);
+    if (filters.am_id) params.append('am_id', filters.am_id);
+    
+    return await customFetch(`${API_URL}/admin/customers?${params.toString()}`, {
+      headers: getHeaders(),
+    });
+  },
+
+  getAdminCustomerById: async (id: number | string) => {
+    return await customFetch(`${API_URL}/admin/customers/${id}`, {
+      headers: getHeaders(),
+    });
+  },
+
+  getAdminUsers: async () => {
+    return await customFetch(`${API_URL}/admin/users`, {
+      headers: getHeaders(),
+    });
+  },
+
+  getCustomerSectors: async () => {
+    return await customFetch(`${API_URL}/admin/customers/sectors`, {
+      headers: getHeaders(),
+    });
+  },
+
   getCustomerContacts: async (customerId: number) => {
     const resp = await fetch(`${API_URL}/customers/${customerId}/contacts`, {
       headers: { "Content-Type": "application/json" }, // public for now
@@ -145,6 +210,11 @@ export const api = {
   // CUSTOMER PORTAL
   // ==================
   
+  getCustomerDashboard: async () => {
+    return await customFetch(`${API_URL}/portal/dashboard`, {
+      headers: getHeaders(),
+    });
+  },
   getMyPqrsfs: async () => {
     return await customFetch(`${API_URL}/portal/pqrsf/mine`, {
       headers: getHeaders(),

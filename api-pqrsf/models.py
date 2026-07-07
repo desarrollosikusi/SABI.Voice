@@ -81,13 +81,24 @@ class Customer(Base):
     estado = Column(String(50), nullable=True)
     fecha_alta_comercial = Column(Date, nullable=True)
     ejecutivo_cuenta_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    pm_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    sdm_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     observaciones = Column(Text)
     notas_relacionamiento = Column(Text, nullable=True)
+    
+    # Campos para Gestor Documental del Logo
+    logo_path = Column(String(255), nullable=True)
+    logo_filename = Column(String(255), nullable=True)
+    logo_content_type = Column(String(50), nullable=True)
+    logo_updated_at = Column(DateTime(timezone=True), nullable=True)
+    
     is_active = Column(Boolean, default=True)
 
     contacts = relationship("Contact", back_populates="customer")
     pqrsfs = relationship("Pqrsf", back_populates="customer")
     ejecutivo_cuenta = relationship("User", foreign_keys=[ejecutivo_cuenta_id])
+    pm = relationship("User", foreign_keys=[pm_id])
+    sdm = relationship("User", foreign_keys=[sdm_id])
 
 class Contact(Base):
     __tablename__ = "contacts"
@@ -105,6 +116,7 @@ class Contact(Base):
     idioma = Column(String(10), default='es')
     recibir_comunicaciones = Column(Boolean, default=True)
     medio_preferido = Column(String(50), nullable=True)
+    notas_relacionamiento = Column(Text, nullable=True)
     
     es_principal = Column(Boolean, default=False)
     es_tecnico = Column(Boolean, default=False)

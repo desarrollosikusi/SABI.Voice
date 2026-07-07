@@ -1,5 +1,6 @@
 import os
 from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Form, Query, Request
+from fastapi.staticfiles import StaticFiles
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -16,6 +17,10 @@ from database import engine, get_db, Base
 from business_rules.engine import engine as rules_engine
 
 app = FastAPI(title="SABI Voice API", version="1.0.0")
+
+# Create static directory if it doesn't exist
+os.makedirs("static/logos", exist_ok=True)
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Security Headers Middleware
 @app.middleware("http")
@@ -200,6 +205,19 @@ def login_for_access_token(
 def read_users_me(current_user: models.User = Depends(auth.get_current_user)):
     return current_user
 
+@app.get("/portal/me", response_model=schemas.ContactResponse)
+def read_portal_me(current_customer: models.Contact = Depends(auth.get_current_customer)):
+    return current_customer
+
+@app.put("/portal/me", response_model=schemas.ContactResponse)
+def update_portal_me(update_data: schemas.ContactUpdate, db: Session = Depends(get_db), current_customer: models.Contact = Depends(auth.get_current_customer)):
+    update_dict = update_data.model_dump(exclude_unset=True)
+    for key, value in update_dict.items():
+        setattr(current_customer, key, value)
+    db.commit()
+    db.refresh(current_customer)
+    return current_customer
+
 # ================================
 # CATÁLOGOS (PÚBLICOS Y PRIVADOS)
 # ================================
@@ -319,6 +337,11 @@ def update_pqrsf(pqrsf_id: int, pqrsf: schemas.PqrsfUpdate, db: Session = Depend
 @app.get("/portal/pqrsf/mine", response_model=List[schemas.PqrsfResponse])
 def get_customer_pqrsfs(db: Session = Depends(get_db), current_customer: models.Contact = Depends(auth.get_current_customer)):
     return crud.get_customer_pqrsfs(db, current_customer.customer_id)
+
+@app.get("/portal/dashboard", response_model=schemas.CustomerDashboardResponse)
+def get_customer_dashboard(db: Session = Depends(get_db), current_customer: models.Contact = Depends(auth.get_current_customer)):
+    return crud.get_customer_dashboard_stats(db, current_customer.customer_id, current_customer.id)
+
 
 @app.get("/pqrsf/{pqrsf_id}/communications", response_model=List[schemas.CaseCommunicationResponse])
 def get_pqrsf_communications(pqrsf_id: int, db: Session = Depends(get_db), token_payload: dict = Depends(auth.get_token_payload)):
@@ -456,6 +479,20 @@ def upload_attachment(pqrsf_id: int, file: UploadFile = File(...), db: Session =
     get_notification_provider().send("Auditoría", "FileUploaded", f"Archivo subido: {safe_filename} al caso {pqrsf_id} por {current_user.username}")
     return {"message": "Attachment uploaded successfully"}
 
+
+from fastapi.responses import FileResponse
+
+@app.get("/api/files/customer-logo/{customer_id}")
+def get_customer_logo(customer_id: int, db: Session = Depends(get_db)):
+    customer = db.query(models.Customer).filter(models.Customer.id == customer_id).first()
+    if not customer or not customer.logo_path:
+        raise HTTPException(status_code=404, detail="Logo not found")
+        
+    file_path = customer.logo_path.lstrip("/")
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Logo file missing")
+        
+    return FileResponse(file_path)
 
 @app.get("/pqrsf/{pqrsf_id}/attachments/{attachment_id}/download")
 def download_attachment(
@@ -710,3 +747,49 @@ def get_executive_insights(db: Session = Depends(get_db)):
         print(f"Error calling IA for insights: {e}")
         
     return schemas.ExecutiveInsight(insights=["No se pudo contactar al servicio de Inteligencia Artificial para generar el resumen."], recomendaciones=[])
+
+# --- Portal Cliente Endpoints ---
+@app.get("/portal/pqrsf/{pqrsf_id}", response_model=schemas.CustomerPqrsfDetailResponse)
+def get_portal_pqrsf_detail(pqrsf_id: int, db: Session = Depends(get_db), current_customer=Depends(auth.get_current_customer)):
+    detail = crud.get_customer_pqrsf_detail(db, pqrsf_id, current_customer.customer_id)
+    if not detail:
+        raise HTTPException(status_code=403, detail="No tienes acceso a este caso o no existe")
+    return detail
+
+@app.get("/portal/pqrsf/{pqrsf_id}/communications", response_model=List[schemas.CustomerCommunicationResponse])
+def get_portal_pqrsf_communications(pqrsf_id: int, db: Session = Depends(get_db), current_customer=Depends(auth.get_current_customer)):
+    return crud.get_customer_pqrsf_communications(db, pqrsf_id, current_customer.customer_id)
+
+@app.post("/portal/pqrsf/{pqrsf_id}/communications", response_model=schemas.CustomerCommunicationResponse)
+def create_portal_pqrsf_communication(
+    pqrsf_id: int, 
+    comm: schemas.CustomerCommunicationCreate, 
+    db: Session = Depends(get_db), 
+    current_customer=Depends(auth.get_current_customer)
+):
+    new_comm = crud.create_customer_communication(db, pqrsf_id, current_customer.customer_id, comm.mensaje)
+    if not new_comm:
+        raise HTTPException(status_code=403, detail="No tienes acceso a este caso o no existe")
+        
+    return {
+        "id": new_comm.id,
+        "fecha": new_comm.fecha,
+        "remitente": "Cliente",
+        "mensaje": new_comm.subject,
+        "adjuntos": []
+    }
+
+@app.get("/api/files/customer-logo/{customer_id}")
+def get_customer_logo(customer_id: int, db: Session = Depends(get_db)):
+    customer = db.query(models.Customer).filter(models.Customer.id == customer_id).first()
+    if not customer or not customer.logo_path:
+        raise HTTPException(status_code=404, detail="Logo not found")
+        
+    if not os.path.exists(customer.logo_path):
+        raise HTTPException(status_code=404, detail="Physical file missing")
+        
+    return FileResponse(
+        path=customer.logo_path,
+        filename=customer.logo_filename or "logo.png",
+        media_type=customer.logo_content_type or "image/png"
+    )

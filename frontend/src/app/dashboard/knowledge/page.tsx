@@ -1,5 +1,10 @@
 'use client';
 import { useState, useEffect } from 'react';
+import PageHeader from '@/components/layout/PageHeader';
+import Card from '@/components/ui/Card';
+import Button from '@/components/ui/Button';
+import Input from '@/components/ui/Input';
+import Badge from '@/components/ui/Badge';
 
 export default function KnowledgeBasePage() {
   const [articles, setArticles] = useState<any[]>([]);
@@ -35,50 +40,58 @@ export default function KnowledgeBasePage() {
   };
 
   return (
-    <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h1 className="page-title" style={{ margin: 0 }}>Base de Conocimiento</h1>
-      </div>
+    <div>
+      <PageHeader 
+        title="Base de Conocimiento"
+        description="Consulta artículos, manuales de solución y guías para resolver casos rápidamente."
+        breadcrumbs={[{ label: 'Inicio', href: '/dashboard' }, { label: 'Base de Conocimiento' }]}
+        actions={<Button variant="primary">Crear Artículo</Button>}
+      />
       
-      <div className="glass-panel" style={{ marginBottom: 32 }}>
-        <form onSubmit={handleSearch} style={{ display: 'flex', gap: 16 }}>
-          <input 
-            type="text" 
-            className="input-field" 
-            placeholder="Buscar por problema, síntoma o error..."
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            style={{ flex: 1 }}
-          />
-          <button type="submit" className="btn-primary" style={{ padding: '0 32px' }}>
-            Buscar
-          </button>
+      <Card style={{ marginBottom: '32px' }}>
+        <form onSubmit={handleSearch} style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+          <div style={{ flex: 1 }}>
+            <Input 
+              placeholder="Buscar por problema, síntoma o código de error..."
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+            />
+          </div>
+          <Button type="submit" variant="secondary" disabled={loading}>
+            {loading ? 'Buscando...' : 'Buscar'}
+          </Button>
         </form>
-      </div>
+      </Card>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 24 }}>
-        {loading ? (
-          <p style={{ color: 'var(--text-secondary)' }}>Buscando artículos...</p>
-        ) : articles.length === 0 ? (
-          <p style={{ color: 'var(--text-secondary)' }}>No se encontraron artículos.</p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: '24px' }}>
+        {articles.length === 0 && !loading ? (
+          <div style={{ gridColumn: '1 / -1', padding: '60px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+            No se encontraron artículos que coincidan con la búsqueda.
+          </div>
         ) : (
           articles.map(article => (
-            <div key={article.id} className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <h3 style={{ fontSize: 16, margin: 0, color: 'var(--accent-color)' }}>{article.title}</h3>
-              <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                {article.arquitectura && <span style={{ marginRight: 8, background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: 4 }}>{article.arquitectura}</span>}
-                {article.area && <span style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: 4 }}>{article.area}</span>}
-              </p>
-              <div style={{ background: 'rgba(0,0,0,0.2)', padding: 12, borderRadius: 8, fontSize: 14, whiteSpace: 'pre-wrap', flex: 1 }}>
-                {article.content}
+            <Card key={article.id} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <h3 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '1.1rem', fontWeight: 600, lineHeight: 1.4 }}>
+                  {article.title}
+                </h3>
+                {article.tags && article.tags.includes('SLA') && (
+                  <Badge variant="warning">SLA</Badge>
+                )}
               </div>
-              <p style={{ fontSize: 11, color: 'var(--text-secondary)', textAlign: 'right' }}>
-                Ref. PQRSF #{article.source_pqrsf_id} - {new Date(article.created_at).toLocaleDateString()}
+              <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: 1.5, flex: 1 }}>
+                {article.content.substring(0, 150)}...
               </p>
-            </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: '16px', borderTop: '1px solid var(--surface-border)' }}>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                  Por: {article.author?.full_name || 'Sistema'}
+                </span>
+                <Button variant="ghost" style={{ padding: '4px 8px' }}>Ver detalles &rarr;</Button>
+              </div>
+            </Card>
           ))
         )}
       </div>
-    </>
+    </div>
   );
 }

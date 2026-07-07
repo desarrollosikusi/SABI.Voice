@@ -2,20 +2,31 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/services/api';
 import Link from 'next/link';
+import SabiCompanion from '@/components/SabiCompanion';
+import KpiCard from '@/components/KpiCard';
 
 export default function CustomerDashboard() {
   const [pqrsfs, setPqrsfs] = useState<any[]>([]);
+  const [dashboardStats, setDashboardStats] = useState<any>(null);
+  const [me, setMe] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
+  const [filterType, setFilterType] = useState<string>("todos");
 
   useEffect(() => {
-    fetchMyCases();
+    fetchData();
   }, []);
 
-  const fetchMyCases = async () => {
+  const fetchData = async () => {
     try {
-      const data = await api.getMyPqrsfs();
-      setPqrsfs(data);
+      const [casesData, statsData, meData] = await Promise.all([
+        api.getMyPqrsfs(),
+        api.getCustomerDashboard(),
+        api.getCustomerMe()
+      ]);
+      setPqrsfs(casesData);
+      setDashboardStats(statsData);
+      setMe(meData);
     } catch (err: any) {
       console.error(err);
       setErrorMsg(err.message || "Error al cargar los datos");
@@ -24,20 +35,16 @@ export default function CustomerDashboard() {
     }
   };
 
-  const getStatusColor = (statusName: string) => {
-    switch (statusName?.toLowerCase()) {
-      case 'nuevo': return '#3B82F6';
-      case 'en análisis': return '#F59E0B';
-      case 'cerrado': return '#10B981';
-      default: return '#6B7280';
-    }
+  const applyFilter = (p: any) => {
+    if (filterType === 'todos') return true;
+    if (filterType === 'mis_abiertos') return !p.estado_rel?.is_final;
+    if (filterType === 'esperando_ikusi') return !p.estado_rel?.is_final && !p.estado_rel?.sla_paused;
+    if (filterType === 'esperando_cliente') return !p.estado_rel?.is_final && p.estado_rel?.sla_paused;
+    if (filterType === 'vencidos_sla') return p.estado_sla === 'Vencido';
+    return true;
   };
 
-  const kpis = {
-    abiertos: pqrsfs.filter(p => !p.fecha_cierre).length,
-    cerrados: pqrsfs.filter(p => p.fecha_cierre).length,
-    total: pqrsfs.length
-  };
+  const filteredPqrsfs = pqrsfs.filter(applyFilter);
 
   if (loading) return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', flexDirection: 'column' }}>
@@ -47,19 +54,44 @@ export default function CustomerDashboard() {
     </div>
   );
 
+  const getDashboardSabiMessage = () => {
+    if (loading) return "Cargando información...";
+    if (errorMsg) return "No pudimos obtener la información en este momento. Inténtalo nuevamente en unos minutos.";
+    const abiertos = dashboardStats?.mis_casos_abiertos || 0;
+    if (abiertos > 0) return `Hoy tienes ${abiertos} solicitudes en seguimiento.`;
+    return "Todo marcha bien. No tienes casos pendientes.";
+  };
+
+  const getDashboardSabiSubmessage = () => {
+    if (dashboardStats?.ultima_actividad) {
+      // Just a mock of 'hace X días', we will just show the date nicely
+      return `Tu última interacción fue el ${new Date(dashboardStats.ultima_actividad).toLocaleDateString()}`;
+    }
+    return "";
+  };
+
   return (
     <div style={{ padding: '40px', maxWidth: 1200, margin: '0 auto' }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 40 }}>
-        <div>
-          <h1 style={{ margin: 0, color: 'var(--primary)', fontSize: '2rem' }}>Portal del Cliente</h1>
-          <p style={{ margin: '8px 0 0 0', color: '#666' }}>Gestione y consulte el estado de sus solicitudes en tiempo real.</p>
-        </div>
+      
+      {/* Top Header Navigation */}
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+        <h1 style={{ margin: 0, color: 'var(--primary)', fontSize: '1.8rem' }}>Inicio</h1>
         <button onClick={() => { 
           localStorage.clear(); 
           sessionStorage.clear();
           window.location.href = '/portal-cliente/login'; 
-        }} className="btn-secondary">Cerrar Sesión</button>
+        }} className="btn-secondary" style={{ padding: '8px 16px' }}>Cerrar Sesión</button>
       </header>
+
+      {/* SABI Dashboard Card */}
+      <SabiCompanion 
+        layout="dashboard"
+        message={getDashboardSabiMessage()}
+        subMessage={getDashboardSabiSubmessage()}
+        contactName={me?.name}
+        customerName={dashboardStats?.customer?.name}
+        logoUrl={dashboardStats?.customer?.logo_url}
+      />
 
       {errorMsg && (
         <div style={{ padding: 16, backgroundColor: '#FEE2E2', color: '#991B1B', borderRadius: 8, marginBottom: 24 }}>
@@ -67,69 +99,103 @@ export default function CustomerDashboard() {
         </div>
       )}
 
-      {/* Light KPIs */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginBottom: '40px' }}>
-        <div className="glass-panel" style={{ textAlign: 'center', padding: '24px' }}>
-          <h3 style={{ margin: '0 0 16px 0', color: '#666' }}>Casos Abiertos</h3>
-          <p style={{ margin: 0, fontSize: '3rem', fontWeight: 700, color: '#3B82F6' }}>{kpis.abiertos}</p>
-        </div>
-        <div className="glass-panel" style={{ textAlign: 'center', padding: '24px' }}>
-          <h3 style={{ margin: '0 0 16px 0', color: '#666' }}>Casos Cerrados</h3>
-          <p style={{ margin: 0, fontSize: '3rem', fontWeight: 700, color: '#10B981' }}>{kpis.cerrados}</p>
-        </div>
-        <div className="glass-panel" style={{ textAlign: 'center', padding: '24px' }}>
-          <h3 style={{ margin: '0 0 16px 0', color: '#666' }}>Total de Solicitudes</h3>
-          <p style={{ margin: 0, fontSize: '3rem', fontWeight: 700, color: '#6B7280' }}>{kpis.total}</p>
-        </div>
+      {/* Interactive KPIs */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '40px' }}>
+        
+        <KpiCard
+          title="Mis Casos Abiertos"
+          value={dashboardStats?.mis_casos_abiertos || 0}
+          icon={<svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>}
+          color="#3B82F6"
+          isActive={filterType === 'mis_abiertos'}
+          onViewDetails={() => setFilterType('mis_abiertos')}
+        />
+
+        <KpiCard
+          title="Abiertos Empresa"
+          value={dashboardStats?.casos_abiertos_empresa || 0}
+          icon={<svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 7h10"/><path d="M7 12h10"/><path d="M7 17h10"/></svg>}
+          color="#10B981"
+          isActive={filterType === 'todos'}
+          onViewDetails={() => setFilterType('todos')}
+        />
+
+        <KpiCard
+          title="Esperando a Ikusi"
+          value={dashboardStats?.esperando_ikusi || 0}
+          icon={<svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>}
+          color="#F59E0B"
+          isActive={filterType === 'esperando_ikusi'}
+          onViewDetails={() => setFilterType('esperando_ikusi')}
+        />
+
+        <KpiCard
+          title="Esperando mi Respuesta"
+          value={dashboardStats?.esperando_cliente || 0}
+          icon={<svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>}
+          color="#8B5CF6"
+          isActive={filterType === 'esperando_cliente'}
+          onViewDetails={() => setFilterType('esperando_cliente')}
+        />
+        
       </div>
 
-      <h2 style={{ marginBottom: 24, fontSize: '1.5rem', color: '#333' }}>Mis Casos (PQRSF)</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+        <h2 style={{ margin: 0, fontSize: '1.5rem', color: 'var(--text-primary)', fontWeight: 600 }}>Mis Casos (PQRSF) {filterType !== 'todos' ? '(Filtrado)' : ''}</h2>
+        <Link href="/nueva-solicitud">
+          <button className="btn-primary" style={{ padding: '10px 20px', borderRadius: 8 }}>Nueva Solicitud</button>
+        </Link>
+      </div>
       
-      {pqrsfs.length === 0 ? (
-        <div className="glass-panel" style={{ textAlign: 'center', padding: '48px', color: '#666' }}>
-          No tiene casos registrados actualmente.
+      {filteredPqrsfs.length === 0 ? (
+        <div className="saas-card" style={{ padding: '40px 0' }}>
+          <SabiCompanion 
+            layout="empty" 
+            message={filterType === 'todos' ? "¡Excelente! No encontramos solicitudes pendientes." : "No se encontraron casos con el filtro seleccionado."}
+            subMessage={filterType === 'todos' ? "Cuando registres una nueva solicitud, aquí podrás hacer seguimiento." : undefined}
+          />
         </div>
       ) : (
-        <div className="glass-panel" style={{ overflow: 'hidden' }}>
+        <div className="saas-card" style={{ overflow: 'hidden', padding: 0 }}>
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '600px' }}>
+            <table className="saas-table" style={{ minWidth: '800px' }}>
               <thead>
-                <tr style={{ backgroundColor: 'rgba(0,0,0,0.02)', textAlign: 'left' }}>
-                  <th style={{ padding: '16px 24px', borderBottom: '1px solid #eee' }}>Consecutivo</th>
-                  <th style={{ padding: '16px 24px', borderBottom: '1px solid #eee' }}>Asunto</th>
-                  <th style={{ padding: '16px 24px', borderBottom: '1px solid #eee' }}>Fecha Creación</th>
-                  <th style={{ padding: '16px 24px', borderBottom: '1px solid #eee' }}>Estado</th>
-                  <th style={{ padding: '16px 24px', borderBottom: '1px solid #eee', textAlign: 'right' }}>Acción</th>
+                <tr>
+                  <th>Consecutivo</th>
+                  <th>Asunto</th>
+                  <th>Estado</th>
+                  <th>Responsable</th>
+                  <th>Última actualización</th>
                 </tr>
               </thead>
-            <tbody>
-              {pqrsfs.map(p => (
-                <tr key={p.id} style={{ borderBottom: '1px solid #eee', transition: 'background 0.2s' }}>
-                  <td style={{ padding: '16px 24px', fontWeight: 600 }}>{p.consecutivo}</td>
-                  <td style={{ padding: '16px 24px' }}>{p.asunto || 'Sin asunto'}</td>
-                  <td style={{ padding: '16px 24px' }}>{new Date(p.fecha_creacion).toLocaleDateString()}</td>
-                  <td style={{ padding: '16px 24px' }}>
-                    <span style={{ 
-                      display: 'inline-block',
-                      padding: '4px 12px', 
-                      borderRadius: '100px', 
-                      fontSize: '0.85rem',
-                      fontWeight: 600,
-                      backgroundColor: getStatusColor(p.estado?.name) + '22',
-                      color: getStatusColor(p.estado?.name)
-                    }}>
-                      {p.estado?.name || 'Desconocido'}
-                    </span>
-                  </td>
-                  <td style={{ padding: '16px 24px', textAlign: 'right' }}>
-                    <Link href={`/portal-cliente/pqrsf/${p.id}`} className="btn-primary" style={{ padding: '8px 16px', fontSize: '0.9rem' }}>
-                      Ver Detalles
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+              <tbody>
+                {filteredPqrsfs.map((pqrsf, i) => (
+                  <tr key={i}>
+                    <td>
+                      <Link href={`/portal-cliente/caso/${pqrsf.id}`} style={{ color: 'var(--primary)', fontWeight: 600, textDecoration: 'none' }}>
+                        {pqrsf.consecutivo}
+                      </Link>
+                    </td>
+                    <td>{pqrsf.asunto}</td>
+                    <td>
+                      <span className="badge" style={{
+                        backgroundColor: pqrsf.estado_visible === 'Cerrado' ? '#ecfdf5' : '#eff6ff',
+                        color: pqrsf.estado_visible === 'Cerrado' ? '#10b981' : '#3b82f6',
+                        border: `1px solid ${pqrsf.estado_visible === 'Cerrado' ? '#a7f3d0' : '#bfdbfe'}`
+                      }}>
+                        {pqrsf.estado_visible}
+                      </span>
+                    </td>
+                    <td style={{ color: pqrsf.responsable_actual === 'IKUSI' ? '#3B82F6' : '#F59E0B', fontWeight: 500 }}>
+                      {pqrsf.responsable_actual}
+                    </td>
+                    <td style={{ color: 'var(--text-secondary)' }}>
+                      {new Date(pqrsf.fecha_ultima_actualizacion).toLocaleString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

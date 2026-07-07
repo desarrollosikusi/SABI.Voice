@@ -1,177 +1,121 @@
 'use client';
 import { useState, useEffect } from 'react';
-
-const CATALOGS = [
-  { id: 'areas', name: 'Áreas' },
-  { id: 'architectures', name: 'Arquitecturas' },
-  { id: 'types', name: 'Tipos PQRSF' },
-  { id: 'priorities', name: 'Prioridades' },
-  { id: 'states', name: 'Estados Workflow' },
-  { id: 'causes', name: 'Causas Probables' },
-  { id: 'categories', name: 'Categorías de Causas' },
-  { id: 'sentiments', name: 'Sentimientos' },
-  { id: 'management-systems', name: 'Sistemas de Gestión' },
-  { id: 'processes', name: 'Procesos' }
-];
+import { api } from '@/services/api';
+import PageHeader from '@/components/layout/PageHeader';
+import Card from '@/components/ui/Card';
+import Tabs from '@/components/ui/Tabs';
+import DataTable from '@/components/ui/DataTable';
+import Button from '@/components/ui/Button';
+import Badge from '@/components/ui/Badge';
 
 export default function AdminPage() {
-  const [selectedCatalog, setSelectedCatalog] = useState(CATALOGS[0].id);
-  const [data, setData] = useState<any[]>([]);
-  const [newItemName, setNewItemName] = useState('');
-
-  const fetchData = async () => {
-    try {
-      const resp = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/admin/${selectedCatalog}`, {
-        headers: { ...(localStorage.getItem("token") ? { Authorization: `Bearer ${localStorage.getItem("token")}` } : {}) }
-      });
-      if (resp.ok) {
-        setData(await resp.json());
-      } else {
-        setData([]);
-      }
-    } catch (e) {
-      console.error(e);
-      setData([]);
-    }
-  };
+  const [activeTab, setActiveTab] = useState('users');
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    fetchData();
-  }, [selectedCatalog]);
-
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newItemName) return;
-    
-    const payload: any = { name: newItemName };
-    if (selectedCatalog === 'priorities') {
-      payload.color = '#000000';
-      payload.horas_objetivo = 24;
-      payload.orden = 1;
+    if (activeTab === 'users') {
+      fetchUsers();
     }
-    
-    try {
-      const resp = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/admin/${selectedCatalog}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(localStorage.getItem("token") ? { Authorization: `Bearer ${localStorage.getItem("token")}` } : {}) },
-        body: JSON.stringify(payload)
-      });
-      if (resp.ok) {
-        setNewItemName('');
-        fetchData();
-      } else {
-        alert("Error al crear registro");
-      }
-    } catch (e) {
-      alert("Error de red");
-    }
-  };
+  }, [activeTab]);
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("¿Está seguro de eliminar (soft delete) este registro?")) return;
+  const fetchUsers = async () => {
+    setLoading(true);
     try {
-      const resp = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/admin/${selectedCatalog}/${id}`, {
-        method: 'DELETE',
-        headers: { ...(localStorage.getItem("token") ? { Authorization: `Bearer ${localStorage.getItem("token")}` } : {}) }
-      });
-      if (resp.ok) {
-        fetchData();
-      }
+      const data = await api.getAdminUsers();
+      setUsers(data);
     } catch (e) {
       console.error(e);
+    } finally {
+      setLoading(false);
     }
   };
 
+  const userColumns = [
+    { key: 'full_name', label: 'Nombre Completo' },
+    { key: 'email', label: 'Correo' },
+    { 
+      key: 'role', 
+      label: 'Rol',
+      render: (u: any) => (
+        <Badge variant={u.role === 'admin' ? 'danger' : 'info'}>{u.role}</Badge>
+      )
+    },
+    { key: 'is_active', label: 'Estado', render: (u: any) => (
+      <Badge variant={u.is_active ? 'success' : 'neutral'}>
+        {u.is_active ? 'Activo' : 'Inactivo'}
+      </Badge>
+    )}
+  ];
+
   return (
-    <>
-      <h1 className="page-title">BackOffice de Administración</h1>
-      
-      <div style={{ display: 'flex', gap: '32px', marginTop: '24px', alignItems: 'flex-start' }}>
-        
-        <div className="glass-panel" style={{ width: '250px', flexShrink: 0, padding: '16px' }}>
-          <h2 style={{ fontSize: 16, marginBottom: 16, color: 'var(--text-secondary)' }}>Catálogos</h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {CATALOGS.map(c => (
-              <button 
-                key={c.id} 
-                onClick={() => setSelectedCatalog(c.id)}
-                style={{ 
-                  textAlign: 'left', 
-                  padding: '8px 12px', 
-                  borderRadius: '6px',
-                  background: selectedCatalog === c.id ? 'var(--brand-primary)' : 'transparent',
-                  color: selectedCatalog === c.id ? '#fff' : 'var(--text-primary)',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontWeight: selectedCatalog === c.id ? 600 : 400
-                }}
-              >
-                {c.name}
-              </button>
-            ))}
-          </div>
-        </div>
+    <div>
+      <PageHeader 
+        title="Administración del Sistema"
+        description="Gestiona usuarios, roles, SLAs, catálogos y configuración general de SABI Voice."
+        breadcrumbs={[{ label: 'Inicio', href: '/dashboard' }, { label: 'Administración' }]}
+      />
 
-        <div className="glass-panel" style={{ flexGrow: 1 }}>
-          <h2 style={{ fontSize: 18, marginBottom: 16 }}>{CATALOGS.find(c => c.id === selectedCatalog)?.name}</h2>
-          
-          <form onSubmit={handleCreate} style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
-            <input 
-              required 
-              value={newItemName} 
-              onChange={e => setNewItemName(e.target.value)} 
-              className="input-field" 
-              type="text" 
-              placeholder="Nuevo nombre..." 
-              style={{ flexGrow: 1 }}
-            />
-            <button type="submit" className="btn-primary" style={{ padding: '0 24px' }}>Agregar</button>
-          </form>
-
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                <th style={{ padding: '12px 8px', color: 'var(--text-secondary)' }}>ID</th>
-                <th style={{ padding: '12px 8px', color: 'var(--text-secondary)' }}>Nombre</th>
-                <th style={{ padding: '12px 8px', color: 'var(--text-secondary)' }}>Estado</th>
-                <th style={{ padding: '12px 8px', color: 'var(--text-secondary)' }}>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.map(item => (
-                <tr key={item.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                  <td style={{ padding: '12px 8px' }}>{item.id}</td>
-                  <td style={{ padding: '12px 8px' }}>{item.name}</td>
-                  <td style={{ padding: '12px 8px' }}>
-                    <span style={{ 
-                      padding: '4px 8px', 
-                      borderRadius: '12px', 
-                      fontSize: '12px', 
-                      background: item.is_active ? 'rgba(0,255,128,0.1)' : 'rgba(255,0,0,0.1)',
-                      color: item.is_active ? '#00FF80' : '#FF4D4D'
-                    }}>
-                      {item.is_active ? 'Activo' : 'Inactivo'}
-                    </span>
-                  </td>
-                  <td style={{ padding: '12px 8px' }}>
-                    {item.is_active && (
-                      <button onClick={() => handleDelete(item.id)} style={{ background: 'none', border: 'none', color: 'var(--status-danger)', cursor: 'pointer' }}>
-                        Desactivar
-                      </button>
-                    )}
-                  </td>
-                </tr>
+      <div style={{ display: 'flex', gap: '32px', alignItems: 'flex-start' }}>
+        <div style={{ width: '250px', flexShrink: 0 }}>
+          <Card noPadding>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {[
+                { id: 'users', label: 'Usuarios y Roles' },
+                { id: 'slas', label: 'Políticas SLA' },
+                { id: 'catalogs', label: 'Catálogos' },
+                { id: 'integrations', label: 'Integraciones' },
+                { id: 'settings', label: 'Configuración General' }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  style={{
+                    padding: '16px 24px',
+                    textAlign: 'left',
+                    background: activeTab === tab.id ? 'var(--surface-hover)' : 'transparent',
+                    border: 'none',
+                    borderLeft: `4px solid ${activeTab === tab.id ? 'var(--primary)' : 'transparent'}`,
+                    color: activeTab === tab.id ? 'var(--primary)' : 'var(--text-secondary)',
+                    fontWeight: activeTab === tab.id ? 600 : 500,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    fontSize: '0.95rem'
+                  }}
+                >
+                  {tab.label}
+                </button>
               ))}
-              {data.length === 0 && (
-                <tr>
-                  <td colSpan={4} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-secondary)' }}>No hay registros.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+            </div>
+          </Card>
         </div>
-        
+
+        <div style={{ flexGrow: 1 }}>
+          <Card>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <h2 style={{ fontSize: '1.25rem', color: 'var(--text-primary)', margin: 0 }}>
+                {activeTab === 'users' ? 'Gestión de Usuarios' : 'Módulo en construcción'}
+              </h2>
+              {activeTab === 'users' && (
+                <Button variant="primary">Nuevo Usuario</Button>
+              )}
+            </div>
+
+            {activeTab === 'users' ? (
+              loading ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>Cargando usuarios...</div>
+              ) : (
+                <DataTable columns={userColumns} data={users} />
+              )
+            ) : (
+              <div style={{ padding: '60px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🚧</div>
+                <p>Este módulo de administración estará disponible próximamente.</p>
+              </div>
+            )}
+          </Card>
+        </div>
       </div>
-    </>
+    </div>
   );
 }

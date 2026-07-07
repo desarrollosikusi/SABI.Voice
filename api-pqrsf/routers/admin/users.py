@@ -1,7 +1,11 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
+from typing import List
 import models, schemas, auth
 from database import get_db
 
 router = APIRouter()
-# TODO: Implement users CRUD
+
+@router.get("/", response_model=List[schemas.UserResponse])
+def get_users(db: Session = Depends(get_db)):
+    return db.query(models.User).filter(models.User.is_active == True).all()

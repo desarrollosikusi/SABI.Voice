@@ -95,8 +95,16 @@ class CustomerBase(BaseModel):
     estado: Optional[str] = None
     fecha_alta_comercial: Optional[date] = None
     ejecutivo_cuenta_id: Optional[int] = None
+    pm_id: Optional[int] = None
+    sdm_id: Optional[int] = None
     observaciones: Optional[str] = None
     notas_relacionamiento: Optional[str] = None
+    
+    logo_path: Optional[str] = None
+    logo_filename: Optional[str] = None
+    logo_content_type: Optional[str] = None
+    logo_updated_at: Optional[datetime] = None
+    
     is_active: bool = True
 
 class CustomerCreate(CustomerBase):
@@ -104,6 +112,16 @@ class CustomerCreate(CustomerBase):
 
 class CustomerResponse(CustomerBase):
     id: int
+    ejecutivo_cuenta: Optional[UserResponse] = None
+    pm: Optional[UserResponse] = None
+    sdm: Optional[UserResponse] = None
+    
+    # Extended metrics
+    total_contactos: Optional[int] = None
+    pqrsf_abiertas: Optional[int] = None
+    pqrsf_cerradas: Optional[int] = None
+    ultima_interaccion: Optional[datetime] = None
+
     class Config:
         from_attributes = True
 
@@ -120,6 +138,7 @@ class ContactBase(BaseModel):
     idioma: str = "es"
     recibir_comunicaciones: bool = True
     medio_preferido: Optional[str] = None
+    notas_relacionamiento: Optional[str] = None
     es_principal: bool = False
     es_tecnico: bool = False
     es_administrativo: bool = False
@@ -130,6 +149,18 @@ class ContactBase(BaseModel):
 
 class ContactCreate(ContactBase):
     pass
+
+class ContactUpdate(BaseModel):
+    name: Optional[str] = None
+    apellidos: Optional[str] = None
+    cargo: Optional[str] = None
+    area: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    celular: Optional[str] = None
+    fecha_nacimiento: Optional[date] = None
+    idioma: Optional[str] = None
+    medio_preferido: Optional[str] = None
 
 class ContactResponse(ContactBase):
     id: int
@@ -424,3 +455,50 @@ class TokenData(BaseModel):
     customer_id: Optional[int] = None
     contact_id: Optional[int] = None
 
+class CustomerInfo(BaseModel):
+    id: int
+    name: str
+    logo_url: Optional[str] = None
+
+class CustomerDashboardResponse(BaseModel):
+    mis_casos_abiertos: int
+    casos_abiertos_empresa: int
+    esperando_ikusi: int
+    esperando_cliente: int
+    vencidos_sla: int
+    ultima_actividad: Optional[datetime] = None
+    customer: Optional[CustomerInfo] = None
+
+# Nuevos DTOs para el Portal Cliente
+class CustomerCommunicationResponse(BaseModel):
+    id: int
+    fecha: datetime
+    remitente: str # 'Cliente' o 'IKUSI'
+    mensaje: Optional[str] = None
+    adjuntos: List[PqrsfAttachmentResponse] = []
+    
+    class Config:
+        from_attributes = True
+
+class CustomerCommunicationCreate(BaseModel):
+    mensaje: str
+
+class CustomerPqrsfDetailResponse(BaseModel):
+    id: int
+    consecutivo: str
+    asunto: Optional[str] = None
+    tipo: Optional[str] = None
+    prioridad: Optional[str] = None
+    estado_visible: Optional[str] = None
+    fecha_creacion: datetime
+    fecha_ultima_actualizacion: Optional[datetime] = None
+    fecha_estimada_respuesta: Optional[datetime] = None
+    responsable_actual: str # "IKUSI" o "Cliente"
+    estado_sla: Optional[str] = None
+    descripcion_original: Optional[str] = None
+    
+    # Nested fields
+    adjuntos_originales: List[PqrsfAttachmentResponse] = []
+    
+    class Config:
+        from_attributes = True

@@ -21,7 +21,7 @@ export default function LoginPage() {
 
   return (
     <div className="login-container">
-      <div className="glass-panel login-form">
+      <div className="saas-card login-form">
         <h2 style={{ textAlign: 'center', marginBottom: 24 }}>Portal Interno IKUSI</h2>
         <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <input 

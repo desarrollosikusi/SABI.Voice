@@ -3,6 +3,10 @@ import { useState, useEffect, useRef } from 'react';
 import { api } from '@/services/api';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import PageHeader from '@/components/layout/PageHeader';
+import Card from '@/components/ui/Card';
+import Badge from '@/components/ui/Badge';
+import Button from '@/components/ui/Button';
 
 export default function PqrsfDetailPage() {
   const { id } = useParams();
@@ -128,25 +132,22 @@ export default function PqrsfDetailPage() {
   if (!data) return <div style={{ padding: 24, textAlign: 'center' }}>Cargando datos del caso...</div>;
 
   return (
-    <div style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 0' }}>
-      
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
-        <div>
-          <Link href="/dashboard" style={{ color: 'var(--accent-color)', textDecoration: 'none', display: 'inline-block', marginBottom: 8 }}>
-            &larr; Volver al Dashboard
-          </Link>
-          <h1 style={{ fontSize: 24, margin: '0 0 8px 0' }}>Caso {data.consecutivo}</h1>
-          <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: 16 }}>{data.asunto}</p>
-        </div>
-        <div style={{ display: 'flex', gap: 12 }}>
-          <div className={`badge status-${data.estado_sla?.toLowerCase() === 'vencido' ? 'danger' : 'aldia'}`}>
-            SLA: {data.estado_sla || 'Al Día'}
+    <div>
+      <PageHeader 
+        title={`Caso ${data.consecutivo}`}
+        description={data.asunto}
+        breadcrumbs={[{ label: 'Inicio', href: '/dashboard' }, { label: 'Gestión de Casos', href: '/dashboard/pqrsf' }, { label: `Caso ${data.consecutivo}` }]}
+        actions={
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <Badge variant={data.estado_sla?.toLowerCase() === 'vencido' ? 'danger' : 'success'}>
+              SLA: {data.estado_sla || 'Al Día'}
+            </Badge>
+            <Badge variant="neutral">
+              Estado: {data.estado?.name || 'Recibido'}
+            </Badge>
           </div>
-          <div className="badge status-estandar">
-            Estado: {data.estado?.name || 'Recibido'}
-          </div>
-        </div>
-      </div>
+        }
+      />
 
       <div style={{ display: 'flex', borderBottom: '1px solid var(--surface-border)', marginBottom: 24, gap: 24 }}>
         {['info', 'conversacion', 'historia', 'documentos'].map(tab => (
@@ -175,7 +176,7 @@ export default function PqrsfDetailPage() {
         <div style={{ flex: 2, display: 'flex', flexDirection: 'column', gap: 24 }}>
           
           {activeTab === 'info' && (
-            <div className="glass-panel" style={{ padding: 32 }}>
+            <Card>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
                 <h2 style={{ fontSize: 18, margin: 0 }}>Detalles del Caso</h2>
                 <button 
@@ -253,7 +254,7 @@ export default function PqrsfDetailPage() {
           )}
 
           {activeTab === 'conversacion' && (
-            <div className="glass-panel" style={{ padding: 0, display: 'flex', flexDirection: 'column', height: '600px' }}>
+            <Card style={{ padding: 0, display: 'flex', flexDirection: 'column', height: '600px' }}>
               <div style={{ padding: '24px', borderBottom: '1px solid var(--surface-border)' }}>
                 <h2 style={{ fontSize: 18, margin: 0 }}>Historial de Conversación</h2>
                 <p style={{ color: 'var(--text-secondary)', margin: '4px 0 0 0', fontSize: 13 }}>Toda la comunicación con el cliente y notas internas relacionadas a este caso.</p>
@@ -313,7 +314,7 @@ export default function PqrsfDetailPage() {
           )}
 
           {activeTab === 'historia' && (
-            <div className="glass-panel" style={{ padding: 32 }}>
+            <Card>
               <h2 style={{ fontSize: 18, marginBottom: 24 }}>Auditoría Completa</h2>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
                 {data.history && data.history.map((h: any) => (
@@ -339,7 +340,7 @@ export default function PqrsfDetailPage() {
           )}
 
           {activeTab === 'documentos' && (
-            <div className="glass-panel" style={{ padding: 32 }}>
+            <Card>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
                 <h2 style={{ fontSize: 18, margin: 0 }}>Documentos Adjuntos</h2>
                 <button className="btn-primary" style={{ padding: '8px 16px', fontSize: 13 }}>
@@ -370,13 +371,14 @@ export default function PqrsfDetailPage() {
                 </div>
               )}
             </div>
+            </Card>
           )}
 
         </div>
 
         {/* Right Sidebar (Copiloto SABI Placeholder) */}
-        <div style={{ flex: 1 }}>
-          <div className="glass-panel" style={{ position: 'sticky', top: 24 }}>
+        <div style={{ flex: 1, minWidth: 300 }}>
+          <Card style={{ position: 'sticky', top: 24 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
               <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 'bold' }}>S</div>
               <h2 style={{ fontSize: 16, margin: 0 }}>Copiloto SABI (Sprint 2)</h2>

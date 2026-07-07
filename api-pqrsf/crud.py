@@ -320,3 +320,140 @@ def search_knowledge(db: Session, query: str = None, area_id: int = None, arquit
         
     return q.order_by(models.KnowledgeArticle.created_at.desc()).limit(limit).all()
 
+
+def get_customer_dashboard_stats(db: Session, customer_id: int, contact_id: int):
+    from sqlalchemy import func, case
+    stats = db.query(
+        func.sum(case(((models.WorkflowState.is_final == False), 1), else_=0)).label('abiertos_empresa'),
+        func.sum(case(((models.Pqrsf.contact_id == contact_id) & (models.WorkflowState.is_final == False), 1), else_=0)).label('mis_abiertos'),
+        func.sum(case(((models.WorkflowState.is_final == False) & (models.WorkflowState.sla_paused == False), 1), else_=0)).label('esperando_ikusi'),
+        func.sum(case(((models.WorkflowState.is_final == False) & (models.WorkflowState.sla_paused == True), 1), else_=0)).label('esperando_cliente'),
+        func.sum(case(((models.WorkflowState.is_final == False) & (models.Pqrsf.estado_sla == 'Vencido'), 1), else_=0)).label('vencidos_sla')
+    ).join(models.WorkflowState, models.Pqrsf.estado_id == models.WorkflowState.id).filter(
+        models.Pqrsf.customer_id == customer_id
+    ).first()
+
+    last_comm = db.query(func.max(models.CaseCommunication.fecha)).join(
+        models.Pqrsf, models.CaseCommunication.pqrsf_id == models.Pqrsf.id
+    ).filter(
+        models.Pqrsf.customer_id == customer_id,
+        models.CaseCommunication.tipo == 'Cliente'
+    ).scalar()
+
+    customer_db = db.query(models.Customer).filter(models.Customer.id == customer_id).first()
+    customer_info = None
+    if customer_db:
+        logo_url = f"/api/files/customer-logo/{customer_db.id}" if customer_db.logo_path else None
+        customer_info = {
+            "id": customer_db.id,
+            "name": customer_db.name,
+            "logo_url": logo_url
+        }
+
+    return {
+        'mis_casos_abiertos': stats.mis_abiertos or 0,
+        'casos_abiertos_empresa': stats.abiertos_empresa or 0,
+        'esperando_ikusi': stats.esperando_ikusi or 0,
+        'esperando_cliente': stats.esperando_cliente or 0,
+        'vencidos_sla': stats.vencidos_sla or 0,
+        'ultima_actividad': last_comm,
+        'customer': customer_info
+    }
+
+def get_customer_pqrsf_detail(db: Session, pqrsf_id: int, customer_id: int):
+    # Verify ownership
+    pqrsf = db.query(models.Pqrsf).filter(
+        models.Pqrsf.id == pqrsf_id,
+        models.Pqrsf.customer_id == customer_id
+    ).first()
+    
+    if not pqrsf:
+        return None
+        
+    estado_visible = pqrsf.estado.name if pqrsf.estado else "Sin estado"
+    
+    # Calculate responsable_actual
+    if pqrsf.estado and pqrsf.estado.is_final:
+        responsable_actual = "Finalizado"
+    elif pqrsf.estado and pqrsf.estado.sla_paused:
+        responsable_actual = "Cliente"
+    else:
+        responsable_actual = "IKUSI"
+        
+    last_update = db.query(func.max(models.CaseCommunication.fecha)).filter(
+        models.CaseCommunication.pqrsf_id == pqrsf.id
+    ).scalar()
+
+    return {
+        "id": pqrsf.id,
+        "consecutivo": pqrsf.consecutivo,
+        "asunto": pqrsf.asunto,
+        "tipo": pqrsf.tipo.name if pqrsf.tipo else None,
+        "prioridad": pqrsf.prioridad.name if pqrsf.prioridad else None,
+        "estado_visible": estado_visible,
+        "fecha_creacion": pqrsf.fecha_creacion,
+        "fecha_ultima_actualizacion": last_update or pqrsf.fecha_creacion,
+        "fecha_estimada_respuesta": pqrsf.fecha_vencimiento,
+        "responsable_actual": responsable_actual,
+        "estado_sla": pqrsf.estado_sla,
+        "descripcion_original": pqrsf.descripcion,
+        "adjuntos_originales": pqrsf.attachments
+    }
+
+def get_customer_pqrsf_communications(db: Session, pqrsf_id: int, customer_id: int):
+    # Verify ownership
+    pqrsf = db.query(models.Pqrsf).filter(
+        models.Pqrsf.id == pqrsf_id,
+        models.Pqrsf.customer_id == customer_id
+    ).first()
+    if not pqrsf:
+        return []
+        
+    # Only return Cliente and Operación messages. No Interno, No Sistema (unless user visible).
+    comms = db.query(models.CaseCommunication).filter(
+        models.CaseCommunication.pqrsf_id == pqrsf.id,
+        models.CaseCommunication.tipo.in_(['Cliente', 'Operación'])
+    ).order_by(models.CaseCommunication.fecha.asc()).all()
+    
+    result = []
+    for c in comms:
+        remitente = "Cliente" if c.tipo == 'Cliente' else "IKUSI"
+        result.append({
+            "id": c.id,
+            "fecha": c.fecha,
+            "remitente": remitente,
+            "mensaje": c.subject, # In our simplified model, subject/mensaje might be the same. Wait, there is no 'mensaje' body in the schema? subject is String(255).
+            "adjuntos": [] # attachments are currently tied to the pqrsf, not individual communications
+        })
+    return result
+
+def create_customer_communication(db: Session, pqrsf_id: int, customer_id: int, mensaje: str):
+    pqrsf = db.query(models.Pqrsf).filter(
+        models.Pqrsf.id == pqrsf_id,
+        models.Pqrsf.customer_id == customer_id
+    ).first()
+    if not pqrsf:
+        return None
+        
+    new_comm = models.CaseCommunication(
+        pqrsf_id=pqrsf_id,
+        subject=mensaje,
+        tipo="Cliente",
+        message_type="Respuesta",
+        direccion="Entrante",
+        canal="Portal",
+        status="Enviado"
+    )
+    db.add(new_comm)
+    
+    # Also log in history
+    history = models.PqrsfHistory(
+        pqrsf_id=pqrsf_id,
+        accion="Respuesta de Cliente",
+        descripcion="El cliente agregó un comentario en el portal"
+    )
+    db.add(history)
+    
+    db.commit()
+    db.refresh(new_comm)
+    return new_comm

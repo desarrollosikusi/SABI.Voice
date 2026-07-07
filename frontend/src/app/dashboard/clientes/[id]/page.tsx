@@ -1,154 +1,133 @@
 'use client';
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useRouter, useParams } from 'next/navigation';
 import { api } from '@/services/api';
-import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import PageHeader from '@/components/layout/PageHeader';
+import Card from '@/components/ui/Card';
+import Tabs from '@/components/ui/Tabs';
+import DataTable from '@/components/ui/DataTable';
 
-export default function CustomerProfilePage() {
+export default function ClienteDetail() {
   const params = useParams();
-  const id = params.id as string;
-  
-  const [customer, setCustomer] = useState<any>(null);
+  const router = useRouter();
+  const [cliente, setCliente] = useState<any>(null);
   const [contacts, setContacts] = useState<any[]>([]);
-  const [cases, setCases] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState('info');
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('general');
 
   useEffect(() => {
-    if (id) fetchData();
-  }, [id]);
+    if (params.id) {
+      loadData(params.id as string);
+    }
+  }, [params.id]);
 
-  const fetchData = async () => {
+  const loadData = async (id: string) => {
+    setLoading(true);
     try {
-      // Usar getCustomer (el que acabamos de crear)
-      const data = await api.getCustomer(parseInt(id));
-      setCustomer(data);
-      
-      // En MVP no tenemos un endpoint separado para contactos de un cliente en /admin/, 
-      // pero para esta prueba, asumiendo que el getCustomer devuelve algunos datos o usamos un mock si no hay
-      // asuminos que en un futuro se traerán de api.getContactsByCustomer(id)
-      
+      const [clienteData, contactsData] = await Promise.all([
+        api.getAdminCustomerById(id),
+        api.getCustomerContacts(Number(id))
+      ]);
+      setCliente(clienteData);
+      setContacts(contactsData);
     } catch (err) {
       console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  if (!customer) return <div>Cargando Perfil del Cliente...</div>;
+  if (loading) {
+    return <div style={{ padding: 40, textAlign: 'center' }}>Cargando detalles del cliente...</div>;
+  }
+
+  if (!cliente) {
+    return <div style={{ padding: 40, textAlign: 'center' }}>Cliente no encontrado</div>;
+  }
+
+  const formatDate = (d: string) => d ? new Date(d).toLocaleDateString() : '-';
+
+  const tabOptions = [
+    { value: 'general', label: 'Información General' },
+    { value: 'stakeholders', label: `Stakeholders (${contacts.length})` }
+  ];
+
+  const contactColumns = [
+    { key: 'full_name', label: 'Nombre', render: (row: any) => `${row.name || ''} ${row.apellidos || ''}`.trim() },
+    { key: 'role_name', label: 'Cargo / Rol', render: (row: any) => row.cargo || 'N/A' },
+    { key: 'email', label: 'Email' },
+    { key: 'phone', label: 'Teléfono', render: (row: any) => row.phone || row.celular || 'N/A' },
+    { key: 'nps_score', label: 'NPS', render: (row: any) => row.nps_score || 'N/A' },
+    { key: 'csat_score', label: 'CSAT', render: (row: any) => row.csat_score || 'N/A' }
+  ];
 
   return (
-    <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
-        <Link href="/dashboard" className="btn btn-secondary">← Volver</Link>
-        <h1 className="page-title" style={{ margin: 0 }}>Cliente: {customer.name}</h1>
-        {customer.estado && (
-          <span className={`badge status-${customer.estado === 'Inactivo' ? 'vencido' : 'aldia'}`}>
-            {customer.estado}
-          </span>
+    <div>
+      <PageHeader 
+        title={cliente.name}
+        description={cliente.sector || 'Sin sector'}
+        breadcrumbs={[{ label: 'Inicio', href: '/dashboard' }, { label: 'Clientes IKUSI', href: '/dashboard/clientes' }, { label: cliente.name }]}
+      />
+
+      <Card style={{ marginBottom: '24px', display: 'flex', gap: '24px', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <h2 style={{ margin: '0 0 8px 0', fontSize: '1.5rem', color: 'var(--text-primary)' }}>{cliente.name}</h2>
+          <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.95rem' }}>NIT: {cliente.nit || 'No registrado'}</p>
+        </div>
+        
+        {cliente.logo_path ? (
+          <img src={`http://localhost:8000${cliente.logo_path}`} alt={cliente.name} style={{ width: 140, height: 60, borderRadius: 'var(--radius-sm)', objectFit: 'contain' }} />
+        ) : (
+          <div style={{ width: 60, height: 60, borderRadius: 'var(--radius-sm)', backgroundColor: 'var(--surface-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 'bold', color: 'var(--text-secondary)' }}>
+            {cliente.name.substring(0, 2).toUpperCase()}
+          </div>
         )}
+      </Card>
+
+      <div style={{ marginBottom: '24px', borderBottom: '1px solid var(--surface-border)' }}>
+        <Tabs value={activeTab} onChange={setActiveTab} options={tabOptions} />
       </div>
 
-      <div className="glass-panel" style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--panel-bg)' }}>
-          <button 
-            className={`tab-btn ${activeTab === 'info' ? 'active' : ''}`}
-            onClick={() => setActiveTab('info')}
-            style={{ padding: '16px 24px', background: 'none', border: 'none', borderBottom: activeTab === 'info' ? '2px solid var(--accent-color)' : '2px solid transparent', color: activeTab === 'info' ? 'var(--text-primary)' : 'var(--text-secondary)', cursor: 'pointer', fontWeight: 600 }}
-          >
-            Información General
-          </button>
-          <button 
-            className={`tab-btn ${activeTab === 'relacion' ? 'active' : ''}`}
-            onClick={() => setActiveTab('relacion')}
-            style={{ padding: '16px 24px', background: 'none', border: 'none', borderBottom: activeTab === 'relacion' ? '2px solid var(--accent-color)' : '2px solid transparent', color: activeTab === 'relacion' ? 'var(--text-primary)' : 'var(--text-secondary)', cursor: 'pointer', fontWeight: 600 }}
-          >
-            Relación y Cercanía
-          </button>
-        </div>
-
-        <div style={{ padding: '24px' }}>
-          {activeTab === 'info' && (
-            <div>
-              <h3 style={{ marginBottom: 16 }}>Datos del Cliente</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '32px' }}>
-                <div>
-                  <label style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>NIT</label>
-                  <div>{customer.nit || 'No registrado'}</div>
-                </div>
-                <div>
-                  <label style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Sector</label>
-                  <div>{customer.sector || 'No registrado'}</div>
-                </div>
-                <div>
-                  <label style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Ciudad / País</label>
-                  <div>{customer.ciudad ? `${customer.ciudad}, ${customer.pais || ''}` : 'No registrado'}</div>
-                </div>
-                <div>
-                  <label style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Criticidad</label>
-                  <div>{customer.criticality}</div>
-                </div>
-              </div>
+      {activeTab === 'general' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
+          <Card>
+            <h3 style={{ fontSize: '1.1rem', marginBottom: '16px' }}>Datos Comerciales</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div><div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Actividad Económica</div><div style={{ fontWeight: 500 }}>{cliente.sector || '-'}</div></div>
+              <div><div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Ciudad / País</div><div style={{ fontWeight: 500 }}>{cliente.ciudad ? `${cliente.ciudad}, ${cliente.pais}` : '-'}</div></div>
+              <div><div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Fecha Alta Comercial</div><div style={{ fontWeight: 500 }}>{formatDate(cliente.fecha_alta_comercial)}</div></div>
             </div>
-          )}
+          </Card>
 
-          {activeTab === 'relacion' && (
-            <div>
-              <h3 style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <svg width="20" height="20" fill="none" stroke="var(--accent-color)" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
-                Relación y Cercanía (CVM)
-              </h3>
-              
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '32px' }}>
-                <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--accent-color)' }}>
-                  <label style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Ejecutivo de Cuenta (CSM)</label>
-                  <div style={{ fontSize: '16px', fontWeight: 500, marginTop: 4 }}>
-                    {customer.ejecutivo_cuenta_id ? `ID: ${customer.ejecutivo_cuenta_id}` : 'No asignado'}
-                  </div>
-                </div>
-                
-                <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid #8b5cf6' }}>
-                  <label style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Fecha de Alta (Aniversario)</label>
-                  <div style={{ fontSize: '16px', fontWeight: 500, marginTop: 4 }}>
-                    {customer.fecha_alta_comercial ? customer.fecha_alta_comercial : 'No registrada'}
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ marginBottom: '32px' }}>
-                <h4 style={{ marginBottom: 12 }}>Notas de Relacionamiento</h4>
-                <div className="glass-panel" style={{ padding: '16px', backgroundColor: 'rgba(255,255,255,0.02)' }}>
-                  <p style={{ margin: 0, color: customer.notas_relacionamiento ? 'inherit' : 'var(--text-secondary)' }}>
-                    {customer.notas_relacionamiento || 'No hay observaciones cualitativas sobre las preferencias de interacción o relacionamiento del cliente.'}
-                  </p>
-                </div>
-              </div>
-              
-              <div>
-                <h4 style={{ marginBottom: 12 }}>Contactos Clave</h4>
-                <div className="table-container">
-                  <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
-                        <th style={{ padding: '12px' }}>Nombre</th>
-                        <th style={{ padding: '12px' }}>Rol</th>
-                        <th style={{ padding: '12px' }}>Cumpleaños</th>
-                        <th style={{ padding: '12px' }}>Canal Preferido</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {/* Aquí se iterarían los contactos reales del cliente */}
-                      <tr>
-                        <td colSpan={4} style={{ padding: '12px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-                          Para ver los contactos es necesario implementar el endpoint /admin/contacts?customer_id=...
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
+          <Card>
+            <h3 style={{ fontSize: '1.1rem', marginBottom: '16px' }}>Equipo Asignado</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div><div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Account Manager (AM)</div><div style={{ fontWeight: 500 }}>{cliente.ejecutivo_cuenta?.name || '-'}</div></div>
+              <div><div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Project Manager (PM)</div><div style={{ fontWeight: 500 }}>{cliente.pm?.name || '-'}</div></div>
+              <div><div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Service Delivery Manager (SDM)</div><div style={{ fontWeight: 500 }}>{cliente.sdm?.name || '-'}</div></div>
             </div>
-          )}
+          </Card>
+
+          <Card>
+            <h3 style={{ fontSize: '1.1rem', marginBottom: '16px' }}>Métricas de Relacionamiento</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div><div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Nivel de Cercanía Global</div><div style={{ fontWeight: 500, color: 'var(--primary)' }}>{cliente.relationship_score || 0}%</div></div>
+              <div><div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Casos Activos</div><div style={{ fontWeight: 500, color: 'var(--warning)' }}>{cliente.open_cases || 0} Casos</div></div>
+              <div><div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Stakeholders Identificados</div><div style={{ fontWeight: 500 }}>{contacts.length} Contactos</div></div>
+            </div>
+          </Card>
         </div>
-      </div>
-    </>
+      )}
+
+      {activeTab === 'stakeholders' && (
+        <Card noPadding>
+          {contacts.length === 0 ? (
+            <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>No hay contactos registrados.</div>
+          ) : (
+            <DataTable columns={contactColumns} data={contacts} />
+          )}
+        </Card>
+      )}
+    </div>
   );
 }
