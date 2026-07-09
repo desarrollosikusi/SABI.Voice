@@ -71,7 +71,6 @@ from security.file_validator import is_allowed_file
 from security.file_scanner import get_file_scanner
 from notifications.provider import get_notification_provider
 from fastapi.responses import JSONResponse, FileResponse
-import traceback
 import re
 
 def secure_filename(filename: str) -> str:
@@ -101,7 +100,7 @@ def on_startup():
 def health_check():
     return {"status": "ok", "message": "Email notification test triggered"}
 
-@app.get("/dashboard/customer-relationship")
+@app.get("/dashboard/customer-relationship", deprecated=True, dependencies=[Depends(auth.get_current_user)])
 def get_customer_relationship_dashboard(db: Session = Depends(get_db)):
     from datetime import datetime, timedelta
     from sqlalchemy import func
@@ -767,7 +766,6 @@ def upload_attachment(pqrsf_id: int, file: UploadFile = File(...), db: Session =
     return {"message": "Attachment uploaded successfully"}
 
 
-from fastapi.responses import FileResponse
 
 @app.get("/api/files/customer-logo/{customer_id}")
 def get_customer_logo(customer_id: int, db: Session = Depends(get_db)):
@@ -840,7 +838,7 @@ def get_knowledge_articles(
 # DASHBOARD
 # ================================
 
-@app.get("/dashboard/stats", response_model=schemas.DashboardStats)
+@app.get("/dashboard/stats", response_model=schemas.DashboardStats, dependencies=[Depends(auth.get_current_user)])
 def get_dashboard_stats(db: Session = Depends(get_db)):
     total = db.query(models.Pqrsf).count()
     abiertos = db.query(models.Pqrsf).join(models.WorkflowState, models.Pqrsf.estado_id == models.WorkflowState.id).filter(~models.WorkflowState.name.in_(['Cerrado', 'Cancelado'])).count()
@@ -927,7 +925,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
         "ia_precision": ia_precision
     }
 
-@app.get("/dashboard/executive-summary", response_model=schemas.ExecutiveSummary)
+@app.get("/dashboard/executive-summary", response_model=schemas.ExecutiveSummary, dependencies=[Depends(auth.get_current_user)])
 def get_executive_summary(db: Session = Depends(get_db)):
     stats = get_dashboard_stats(db)
     
@@ -964,7 +962,7 @@ def get_executive_summary(db: Session = Depends(get_db)):
         "clientes_estrategicos_afectados": [{"cliente": c[0], "nivel": c[1], "casos_activos": c[2]} for c in clientes_estrategicos]
     }
 
-@app.get("/dashboard/root-causes", response_model=schemas.RootCauseResponse)
+@app.get("/dashboard/root-causes", response_model=schemas.RootCauseResponse, dependencies=[Depends(auth.get_current_user)])
 def get_root_causes(db: Session = Depends(get_db)):
     top_q = db.query(
         models.ProbableCause.name, 
@@ -1017,7 +1015,7 @@ def get_root_causes(db: Session = Depends(get_db)):
         "by_area": by_area
     }
 
-@app.get("/dashboard/executive-insights", response_model=schemas.ExecutiveInsight)
+@app.get("/dashboard/executive-insights", response_model=schemas.ExecutiveInsight, dependencies=[Depends(auth.get_current_user)])
 def get_executive_insights(db: Session = Depends(get_db)):
     root_causes = get_root_causes(db)
     

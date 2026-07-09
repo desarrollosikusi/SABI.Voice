@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { api } from '@/services/api';
 import Link from 'next/link';
 import SabiCompanion from '@/components/SabiCompanion';
-import Card from '@/components/Card';
+import Card from '@/components/ui/Card';
 import StatusBadge from '@/components/StatusBadge';
 import ConversationBubble from '@/components/ConversationBubble';
 import { useParams } from 'next/navigation';

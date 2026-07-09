@@ -25,6 +25,7 @@ services:
       - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-pqrsf_db}
       - JWT_SECRET=${JWT_SECRET:-supersecretkey}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
+      - WATCHFILES_FORCE_POLLING=true
     volumes:
       - ./api-pqrsf:/app
     depends_on:
@@ -69,6 +70,7 @@ services:
       - "3000:3000"
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - WATCHPACK_POLLING=true
     volumes:
       - ./frontend:/app
       - /app/node_modules

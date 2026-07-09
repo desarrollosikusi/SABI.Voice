@@ -264,11 +264,7 @@ export const api = {
     });
   },
 
-  getEconomicSectors: async () => {
-    return await customFetch(`${API_URL}/catalogs/economic-sectors`, {
-      headers: getHeaders(),
-    });
-  },
+
 
   getCustomerContacts: async (customerId: number) => {
     const resp = await fetch(`${API_URL}/customers/${customerId}/contacts`, {

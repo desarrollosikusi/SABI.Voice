@@ -250,7 +250,7 @@ export default function PqrsfDetailPage() {
                 </div>
 
               </div>
-            </div>
+            </Card>
           )}
 
           {activeTab === 'conversacion' && (
@@ -310,7 +310,7 @@ export default function PqrsfDetailPage() {
                   </button>
                 </form>
               </div>
-            </div>
+            </Card>
           )}
 
           {activeTab === 'historia' && (
@@ -336,7 +336,7 @@ export default function PqrsfDetailPage() {
                   </div>
                 ))}
               </div>
-            </div>
+            </Card>
           )}
 
           {activeTab === 'documentos' && (
@@ -370,7 +370,6 @@ export default function PqrsfDetailPage() {
                   <p style={{ color: 'var(--text-secondary)', fontSize: 15, margin: 0 }}>No hay documentos adjuntos en este caso.</p>
                 </div>
               )}
-            </div>
             </Card>
           )}
 
@@ -389,7 +388,7 @@ export default function PqrsfDetailPage() {
             <div style={{ height: 200, backgroundColor: 'rgba(0,0,0,0.03)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed rgba(0,0,0,0.1)' }}>
               <span style={{ fontSize: 12, color: '#999' }}>IA no disponible</span>
             </div>
-          </div>
+          </Card>
         </div>
 
       </div>

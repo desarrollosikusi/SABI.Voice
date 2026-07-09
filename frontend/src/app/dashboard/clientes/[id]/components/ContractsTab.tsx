@@ -170,9 +170,6 @@ export default function ContractsTab({ customerId }: ContractsTabProps) {
         <DataTable 
           data={contracts}
           columns={columns}
-          searchable={true}
-          searchPlaceholder="Buscar por nombre o código..."
-          emptyMessage="No se encontraron contratos para este cliente."
         />
       </div>
     </div>
