@@ -353,5 +353,40 @@ export const api = {
     return await customFetch(`${API_URL}/admin/customers/${id}`, {
       headers: getHeaders()
     });
+  },
+
+  // --- Contracts API ---
+  getCustomerContracts: async (customerId: string | number, filters: any = {}) => {
+    const params = new URLSearchParams();
+    if (filters.status) params.append('status', filters.status);
+    if (filters.contract_type) params.append('contract_type', filters.contract_type);
+    if (filters.architecture) params.append('architecture', filters.architecture);
+    const queryString = params.toString() ? `?${params.toString()}` : '';
+    
+    return await customFetch(`${API_URL}/admin/customers/${customerId}/contracts${queryString}`, {
+      headers: getHeaders(),
+      cache: 'no-store' // Compliance with AG-001
+    });
+  },
+
+  getCustomerContractMetrics: async (customerId: string | number) => {
+    return await customFetch(`${API_URL}/admin/customers/${customerId}/contracts/metrics`, {
+      headers: getHeaders(),
+      cache: 'no-store' // Compliance with AG-001
+    });
+  },
+
+  getIntegrationStatus: async () => {
+    return await customFetch(`${API_URL}/admin/contracts/integration-status`, {
+      headers: getHeaders(),
+      cache: 'no-store' // Compliance with AG-001
+    });
+  },
+
+  getContractDetails: async (externalId: string) => {
+    return await customFetch(`${API_URL}/admin/contracts/${externalId}`, {
+      headers: getHeaders(),
+      cache: 'no-store' // Compliance with AG-001
+    });
   }
 };

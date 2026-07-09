@@ -7,6 +7,7 @@ import Card from '@/components/ui/Card';
 import Tabs from '@/components/ui/Tabs';
 import DataTable from '@/components/ui/DataTable';
 import { formatDocument } from '@/utils/formatters';
+import ContractsTab from './components/ContractsTab';
 
 export default function ClienteDetail() {
   const params = useParams();
@@ -210,6 +211,7 @@ export default function ClienteDetail() {
     { value: 'general', label: 'Información General' },
     { value: 'tecnica', label: 'Información Técnica' },
     { value: 'stakeholders', label: `Stakeholders (${contacts.length})` },
+    { value: 'contratos', label: 'Contratos en Curso' },
     { value: 'administracion', label: 'Administración' }
   ];
 
@@ -340,6 +342,10 @@ export default function ClienteDetail() {
             </p>
           </div>
         </Card>
+      )}
+
+      {activeTab === 'contratos' && (
+        <ContractsTab customerId={Number(cliente.id)} />
       )}
 
       {activeTab === 'administracion' && (
