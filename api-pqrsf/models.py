@@ -69,15 +69,28 @@ class DashboardConfig(Base):
     key_name = Column(String(100), unique=True, nullable=False)
     value = Column(JSON, nullable=False)
 
+class EconomicSector(Base):
+    __tablename__ = "economic_sectors"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), unique=True, nullable=False)
+    is_active = Column(Boolean, default=True)
+    order_index = Column(Integer, default=0)
+
 class Customer(Base):
     __tablename__ = "customers"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(150), unique=True, nullable=False)
-    nit = Column(String(50), unique=True)
+    razon_social = Column(String(200), nullable=True)
+    document_type = Column(String(20), default="NIT")
+    nit = Column(String(50), index=True) # unique constraint removed for Sector Público Territorial rules
     criticality = Column(String(50), default="Estándar")
-    sector = Column(String(100))
+    sector = Column(String(100)) # Legacy, will be replaced by economic_sector_id
+    economic_sector_id = Column(Integer, ForeignKey("economic_sectors.id", ondelete="SET NULL"), nullable=True)
     ciudad = Column(String(100), nullable=True)
     pais = Column(String(100), nullable=True)
+    direccion_principal = Column(String(255), nullable=True)
+    pagina_web = Column(String(255), nullable=True)
+    telefono_principal = Column(String(50), nullable=True)
     estado = Column(String(50), nullable=True)
     fecha_alta_comercial = Column(Date, nullable=True)
     ejecutivo_cuenta_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
@@ -96,6 +109,7 @@ class Customer(Base):
 
     contacts = relationship("Contact", back_populates="customer")
     pqrsfs = relationship("Pqrsf", back_populates="customer")
+    economic_sector = relationship("EconomicSector")
     ejecutivo_cuenta = relationship("User", foreign_keys=[ejecutivo_cuenta_id])
     pm = relationship("User", foreign_keys=[pm_id])
     sdm = relationship("User", foreign_keys=[sdm_id])
@@ -103,6 +117,7 @@ class Customer(Base):
 class Contact(Base):
     __tablename__ = "contacts"
     id = Column(Integer, primary_key=True, index=True)
+    functional_id = Column(String(50), unique=True, index=True, nullable=True) # nullable true initially to not break existing data
     customer_id = Column(Integer, ForeignKey("customers.id", ondelete="CASCADE"))
     name = Column(String(150), nullable=False)
     apellidos = Column(String(150), nullable=True)
@@ -124,10 +139,44 @@ class Contact(Base):
     es_comercial = Column(Boolean, default=False)
     
     is_active = Column(Boolean, default=True)
+    deactivation_reporter = Column(String(150), nullable=True)
+    deactivation_support = Column(Text, nullable=True)
+    deactivation_date = Column(DateTime, nullable=True)
+    
     receives_notifications = Column(Boolean, default=True)
     authorized_for_pqrsf = Column(Boolean, default=True)
 
+    additional_data = Column(JSON, nullable=True)
+
     customer = relationship("Customer", back_populates="contacts")
+    history = relationship("ContactHistory", back_populates="contact")
+
+class ContactHistory(Base):
+    __tablename__ = "contact_history"
+    id = Column(Integer, primary_key=True, index=True)
+    contact_id = Column(Integer, ForeignKey("contacts.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    field_name = Column(String(100), nullable=False)
+    old_value = Column(String(255), nullable=True)
+    new_value = Column(String(255), nullable=True)
+    changed_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    contact = relationship("Contact", back_populates="history")
+    user = relationship("User")
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    action = Column(String(50), nullable=False)
+    entity_type = Column(String(50), nullable=False)
+    entity_id = Column(Integer, nullable=False)
+    customer_id = Column(Integer, ForeignKey("customers.id", ondelete="CASCADE"), nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    timestamp = Column(DateTime, default=datetime.datetime.utcnow)
+    details = Column(JSON, nullable=True)
+    
+    user = relationship("User")
+    customer = relationship("Customer")
 
 class User(Base):
     __tablename__ = "users"
@@ -137,6 +186,7 @@ class User(Base):
     username = Column(String(50), unique=True, index=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
     role = Column(String(50), default="Administrador")
+    job_title = Column(String(100), nullable=True)
     area_id = Column(Integer, ForeignKey("areas.id", ondelete="SET NULL"), nullable=True)
     is_active = Column(Boolean, default=True)
     last_login = Column(DateTime, nullable=True)

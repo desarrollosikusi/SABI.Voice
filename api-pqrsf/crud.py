@@ -52,14 +52,17 @@ def get_customer_pqrsfs(db: Session, customer_id: int):
 def search_customers(db: Session, search: str, limit: int = 10):
     if not search or len(search) < 3:
         return []
+        
+    import re
+    clean_search = re.sub(r'[^a-zA-Z0-9]', '', search).upper()
+    
     return db.query(models.Customer).filter(
         models.Customer.is_active == True,
-        models.Customer.name.ilike(f"%{search}%")
+        (models.Customer.name.ilike(f"%{search}%")) | (models.Customer.nit.ilike(f"%{clean_search}%") if clean_search else False)
     ).limit(limit).all()
 
 def get_contacts_by_customer(db: Session, customer_id: int):
     return db.query(models.Contact).filter(
-        models.Contact.is_active == True,
         models.Contact.customer_id == customer_id
     ).all()
 

@@ -8,6 +8,7 @@ from sqlalchemy import func, String, cast
 from typing import List, Optional
 import datetime
 import requests
+import uuid
 
 import models
 import schemas
@@ -15,6 +16,19 @@ import crud
 import auth
 from database import engine, get_db, Base
 from business_rules.engine import engine as rules_engine
+
+
+def log_audit(db: Session, action: str, entity_type: str, entity_id: int, user_id: int, customer_id: int = None, details: dict = None):
+    audit = models.AuditLog(
+        action=action,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        customer_id=customer_id,
+        user_id=user_id,
+        details=details
+    )
+    db.add(audit)
+    db.commit()
 
 app = FastAPI(title="SABI Voice API", version="1.0.0")
 
@@ -224,6 +238,112 @@ def update_portal_me(update_data: schemas.ContactUpdate, db: Session = Depends(g
 from routers.admin import router as admin_router
 app.include_router(admin_router, prefix="/admin")
 
+@app.get("/catalogs/economic-sectors", response_model=List[schemas.EconomicSectorResponse])
+def get_economic_sectors(db: Session = Depends(get_db)):
+    return db.query(models.EconomicSector).filter(models.EconomicSector.is_active == True).order_by(models.EconomicSector.order_index).all()
+
+@app.get("/catalogs/internal-users", response_model=List[schemas.UserResponse])
+def get_internal_users(db: Session = Depends(get_db)):
+    # Returns internal active users for dropdowns
+    return db.query(models.User).filter(models.User.is_active == True).all()
+
+@app.put("/admin/customers/{customer_id}", response_model=schemas.CustomerResponse)
+def update_customer_admin(
+    customer_id: int, 
+    customer_update: schemas.CustomerUpdate, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    # Role-based authorization
+    allowed_roles = ["admin", "Operaciones", "Coordinador"]
+    if current_user.role not in allowed_roles:
+        raise HTTPException(status_code=403, detail="No tienes permisos para editar clientes.")
+    
+    db_customer = crud.get_customer_by_id(db, customer_id)
+    if not db_customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+        
+    provider = get_notification_provider()
+    
+    # Track changes
+    old_sector = db_customer.economic_sector_id
+    old_pm = db_customer.pm_id
+    old_sdm = db_customer.sdm_id
+    old_am = db_customer.ejecutivo_cuenta_id
+    
+    update_data = customer_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_customer, key, value)
+        
+    db.commit()
+    db.refresh(db_customer)
+    
+    # Audit events
+    provider.send("Auditoría", "CustomerUpdated", f"El cliente {db_customer.name} fue actualizado por {current_user.username}")
+    
+    if "economic_sector_id" in update_data and old_sector != db_customer.economic_sector_id:
+        provider.send("Auditoría", "CustomerSectorChanged", f"Sector del cliente {db_customer.name} actualizado.")
+        
+    if "pm_id" in update_data and old_pm != db_customer.pm_id:
+        provider.send("Auditoría", "CustomerResponsibleChanged", f"PM del cliente {db_customer.name} actualizado.")
+        
+    if "sdm_id" in update_data and old_sdm != db_customer.sdm_id:
+        provider.send("Auditoría", "CustomerResponsibleChanged", f"SDM del cliente {db_customer.name} actualizado.")
+        
+    if "ejecutivo_cuenta_id" in update_data and old_am != db_customer.ejecutivo_cuenta_id:
+        provider.send("Auditoría", "CustomerResponsibleChanged", f"AM del cliente {db_customer.name} actualizado.")
+        
+    return db_customer
+
+@app.post("/admin/customers/{customer_id}/logo")
+def upload_customer_logo(
+    customer_id: int, 
+    file: UploadFile = File(...), 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    allowed_roles = ["admin", "Operaciones", "Coordinador"]
+    if current_user.role not in allowed_roles:
+        raise HTTPException(status_code=403, detail="No tienes permisos para editar clientes.")
+        
+    if file.content_type not in ["image/jpeg", "image/png", "image/svg+xml"]:
+        raise HTTPException(status_code=400, detail="Formato no permitido")
+        
+    content = file.file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="El logo no puede exceder 5MB")
+        
+    file.file.seek(0)
+    
+    db_customer = crud.get_customer_by_id(db, customer_id)
+    if not db_customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+        
+    import uuid
+    import os
+    from datetime import datetime
+    
+    ext = file.filename.split('.')[-1]
+    safe_filename = f"{uuid.uuid4().hex}.{ext}"
+    upload_dir = "static/logos"
+    os.makedirs(upload_dir, exist_ok=True)
+    file_path = os.path.join(upload_dir, safe_filename)
+    
+    with open(file_path, "wb") as f:
+        f.write(content)
+        
+    db_customer.logo_path = file_path
+    db_customer.logo_filename = file.filename
+    db_customer.logo_content_type = file.content_type
+    db_customer.logo_updated_at = datetime.utcnow()
+    
+    db.commit()
+    
+    provider = get_notification_provider()
+    provider.send("Auditoría", "CustomerLogoUpdated", f"Logo del cliente {db_customer.name} actualizado por {current_user.username}")
+    
+    return {"message": "Logo actualizado exitosamente", "logo_path": file_path}
+
 @app.get("/catalogs/customers", response_model=List[schemas.CustomerResponse])
 def search_customers(search: str = Query(None, min_length=3), db: Session = Depends(get_db)):
     if not search:
@@ -234,22 +354,189 @@ def search_customers(search: str = Query(None, min_length=3), db: Session = Depe
 def get_customer_contacts(customer_id: int, db: Session = Depends(get_db)):
     return crud.get_contacts_by_customer(db, customer_id)
 
+@app.get("/customers/check-nit/{nit}")
+def check_nit(nit: str, document_type: str = "NIT", db: Session = Depends(get_db)):
+    if document_type == "NIT":
+        clean_nit = re.sub(r'\D', '', nit)
+    else:
+        clean_nit = re.sub(r'[^a-zA-Z0-9]', '', nit).upper()
+    exists = db.query(models.Customer).filter(models.Customer.nit == clean_nit).first() is not None
+    return {"exists": exists}
+
 @app.post("/customers", response_model=schemas.CustomerResponse)
 def create_customer(customer: schemas.CustomerCreate, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
-    # Basic CRUD without checking roles for MVP
+    duplicated_nit = False
+    if customer.nit:
+        existing_customer = db.query(models.Customer).filter(models.Customer.nit == customer.nit).first()
+        if existing_customer:
+            if customer.economic_sector_id != 4:
+                raise HTTPException(status_code=400, detail="El NIT ya se encuentra registrado.")
+            duplicated_nit = True
+
     db_customer = models.Customer(**customer.model_dump())
     db.add(db_customer)
     db.commit()
     db.refresh(db_customer)
+    
+    if duplicated_nit:
+        log_audit(
+            db, 
+            action="CustomerCreatedWithDuplicateNIT", 
+            entity_type="Customer", 
+            entity_id=db_customer.id, 
+            user_id=current_user.id, 
+            customer_id=db_customer.id,
+            details={"nit": customer.nit, "motivo": "Registro permitido por regla de Sector Público Territorial"}
+        )
+        
     return db_customer
 
 @app.post("/contacts", response_model=schemas.ContactResponse)
 def create_contact(contact: schemas.ContactCreate, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    # Validate email
+    existing_email = db.query(models.Contact).filter(models.Contact.customer_id == contact.customer_id, models.Contact.email == contact.email).first()
+    if existing_email:
+        raise HTTPException(status_code=400, detail="El correo ya se encuentra registrado para este cliente.")
+    
+    # Validate principal
+    if contact.es_principal:
+        existing_principal = db.query(models.Contact).filter(models.Contact.customer_id == contact.customer_id, models.Contact.es_principal == True, models.Contact.is_active == True).first()
+        if existing_principal:
+            raise HTTPException(status_code=400, detail="Ya existe un contacto principal activo para este cliente.")
+
     db_contact = models.Contact(**contact.model_dump())
+    db_contact.functional_id = f"STK-{uuid.uuid4().hex[:8].upper()}"
     db.add(db_contact)
     db.commit()
     db.refresh(db_contact)
+    
+    history_entry = models.ContactHistory(
+        contact_id=db_contact.id,
+        user_id=current_user.id,
+        field_name="creation",
+        old_value=None,
+        new_value="Created",
+        changed_at=datetime.datetime.utcnow()
+    )
+    db.add(history_entry)
+    db.commit()
+
+    provider = get_notification_provider()
+    provider.send("Sistema", "ContactCreated", f"Nuevo contacto registrado: {db_contact.name} ({db_contact.email})")
+
+    log_audit(db, "ContactCreated", "Contact", db_contact.id, current_user.id, db_contact.customer_id)
     return db_contact
+
+@app.put("/contacts/{contact_id}", response_model=schemas.ContactResponse)
+def update_contact(contact_id: int, contact: schemas.ContactUpdateAdmin, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    db_contact = db.query(models.Contact).filter(models.Contact.id == contact_id).first()
+    if not db_contact:
+        raise HTTPException(status_code=404, detail="Contacto no encontrado")
+    
+    update_data = contact.model_dump(exclude_unset=True)
+    
+    if "email" in update_data and update_data["email"] != db_contact.email:
+        existing_email = db.query(models.Contact).filter(models.Contact.customer_id == db_contact.customer_id, models.Contact.email == update_data["email"]).first()
+        if existing_email:
+            raise HTTPException(status_code=400, detail="El correo ya se encuentra registrado para este cliente.")
+            
+    if update_data.get("es_principal"):
+        existing_principal = db.query(models.Contact).filter(models.Contact.customer_id == db_contact.customer_id, models.Contact.es_principal == True, models.Contact.is_active == True, models.Contact.id != contact_id).first()
+        if existing_principal:
+            raise HTTPException(status_code=400, detail="Ya existe un contacto principal activo para este cliente.")
+
+    for key, value in update_data.items():
+        old_val = getattr(db_contact, key)
+        if old_val != value:
+            setattr(db_contact, key, value)
+            history_entry = models.ContactHistory(
+                contact_id=db_contact.id,
+                user_id=current_user.id,
+                field_name=key,
+                old_value=str(old_val) if old_val is not None else None,
+                new_value=str(value) if value is not None else None,
+                changed_at=datetime.datetime.utcnow()
+            )
+            db.add(history_entry)
+        
+    db.commit()
+    db.refresh(db_contact)
+    
+    provider = get_notification_provider()
+    provider.send("Sistema", "ContactUpdated", f"Contacto actualizado: {db_contact.name} ({db_contact.email})")
+    
+    log_audit(db, "ContactUpdated", "Contact", db_contact.id, current_user.id, db_contact.customer_id, details=update_data)
+    return db_contact
+
+@app.patch("/contacts/{contact_id}/deactivate", response_model=schemas.ContactResponse)
+def deactivate_contact(contact_id: int, data: schemas.ContactDeactivate, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    db_contact = db.query(models.Contact).filter(models.Contact.id == contact_id).first()
+    if not db_contact:
+        raise HTTPException(status_code=404, detail="Contacto no encontrado")
+        
+    db_contact.is_active = False
+    db_contact.deactivation_reporter = data.deactivation_reporter
+    db_contact.deactivation_support = data.deactivation_support
+    db_contact.deactivation_date = datetime.datetime.utcnow()
+    
+    history_entry = models.ContactHistory(
+        contact_id=db_contact.id,
+        user_id=current_user.id,
+        field_name="status",
+        old_value="Active",
+        new_value="Inactive",
+        changed_at=datetime.datetime.utcnow()
+    )
+    db.add(history_entry)
+    
+    db.commit()
+    db.refresh(db_contact)
+    
+    provider = get_notification_provider()
+    provider.send("Sistema", "ContactDeactivated", f"Contacto inactivado: {db_contact.name} ({db_contact.email})")
+    
+    log_audit(db, "ContactDeactivated", "Contact", db_contact.id, current_user.id, db_contact.customer_id, details=data.model_dump())
+    return db_contact
+
+@app.patch("/contacts/{contact_id}/reactivate", response_model=schemas.ContactResponse)
+def reactivate_contact(contact_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    db_contact = db.query(models.Contact).filter(models.Contact.id == contact_id).first()
+    if not db_contact:
+        raise HTTPException(status_code=404, detail="Contacto no encontrado")
+        
+    if db_contact.es_principal:
+        existing_principal = db.query(models.Contact).filter(models.Contact.customer_id == db_contact.customer_id, models.Contact.es_principal == True, models.Contact.is_active == True, models.Contact.id != contact_id).first()
+        if existing_principal:
+            raise HTTPException(status_code=400, detail="Ya existe un contacto principal activo para este cliente. Retire el rol principal al otro contacto antes de reactivar.")
+
+    db_contact.is_active = True
+    db_contact.deactivation_reporter = None
+    db_contact.deactivation_support = None
+    db_contact.deactivation_date = None
+    
+    history_entry = models.ContactHistory(
+        contact_id=db_contact.id,
+        user_id=current_user.id,
+        field_name="status",
+        old_value="Inactive",
+        new_value="Active",
+        changed_at=datetime.datetime.utcnow()
+    )
+    db.add(history_entry)
+    
+    db.commit()
+    db.refresh(db_contact)
+    
+    provider = get_notification_provider()
+    provider.send("Sistema", "ContactReactivated", f"Contacto reactivado: {db_contact.name} ({db_contact.email})")
+    
+    log_audit(db, "ContactReactivated", "Contact", db_contact.id, current_user.id, db_contact.customer_id)
+    return db_contact
+
+@app.get("/contacts/{contact_id}/history", response_model=List[schemas.ContactHistoryResponse])
+def get_contact_history(contact_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    return db.query(models.ContactHistory).filter(models.ContactHistory.contact_id == contact_id).order_by(models.ContactHistory.changed_at.desc()).all()
+
 
 # ================================
 # PQRSF

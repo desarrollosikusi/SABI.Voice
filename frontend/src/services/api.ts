@@ -21,7 +21,7 @@ export const logout = () => {
 };
 
 const customFetch = async (url: string, options: RequestInit = {}) => {
-  const resp = await fetch(url, options);
+  const resp = await fetch(url, { ...options, cache: 'no-store' });
   if (resp.status === 401 || resp.status === 403) {
     logout();
     throw new Error("Sesión expirada o acceso denegado. Por favor, inicie sesión nuevamente.");
@@ -151,10 +151,92 @@ export const api = {
     return resp.json();
   },
 
+  getEconomicSectors: async () => {
+    return await customFetch(`${API_URL}/catalogs/economic-sectors`, {
+      headers: getHeaders(),
+    });
+  },
+
+  getInternalUsers: async () => {
+    return await customFetch(`${API_URL}/catalogs/internal-users`, {
+      headers: getHeaders(),
+    });
+  },
+  createContact: async (data: any) => {
+    return await customFetch(`${API_URL}/contacts`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateContact: async (id: number, data: any) => {
+    return await customFetch(`${API_URL}/contacts/${id}`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    });
+  },
+
+  deactivateContact: async (id: number, reporter: string, support: string) => {
+    return await customFetch(`${API_URL}/contacts/${id}/deactivate`, {
+      method: 'PATCH',
+      headers: getHeaders(),
+      body: JSON.stringify({ deactivation_reporter: reporter, deactivation_support: support }),
+    });
+  },
+
+  reactivateContact: async (id: number) => {
+    return await customFetch(`${API_URL}/contacts/${id}/reactivate`, {
+      method: 'PATCH',
+      headers: getHeaders(),
+    });
+  },
+
+  updateCustomerAdmin: async (id: number, data: any) => {
+    return await customFetch(`${API_URL}/admin/customers/${id}`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    });
+  },
+
+  createCustomer: async (data: any) => {
+    return await customFetch(`${API_URL}/customers`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    });
+  },
+
+  checkNit: async (nit: string) => {
+    return await customFetch(`${API_URL}/customers/check-nit/${encodeURIComponent(nit)}`, {
+      headers: getHeaders(),
+    });
+  },
+
+  uploadCustomerLogo: async (id: number, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const resp = await fetch(`${API_URL}/admin/customers/${id}/logo`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: formData,
+    });
+    if (!resp.ok) {
+      const errorData = await resp.json().catch(() => ({}));
+      throw new Error(errorData.detail || 'Failed to upload logo');
+    }
+    return resp.json();
+  },
+
   getAdminCustomers: async (filters: any = {}) => {
     const params = new URLSearchParams();
     if (filters.search) params.append('search', filters.search);
-    if (filters.sector) params.append('sector', filters.sector);
+    if (filters.economic_sector_id) params.append('economic_sector_id', filters.economic_sector_id);
+    else if (filters.sector) params.append('sector', filters.sector);
     if (filters.pm_id) params.append('pm_id', filters.pm_id);
     if (filters.sdm_id) params.append('sdm_id', filters.sdm_id);
     if (filters.am_id) params.append('am_id', filters.am_id);
@@ -178,6 +260,12 @@ export const api = {
 
   getCustomerSectors: async () => {
     return await customFetch(`${API_URL}/admin/customers/sectors`, {
+      headers: getHeaders(),
+    });
+  },
+
+  getEconomicSectors: async () => {
+    return await customFetch(`${API_URL}/catalogs/economic-sectors`, {
       headers: getHeaders(),
     });
   },

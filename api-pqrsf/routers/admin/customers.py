@@ -13,6 +13,7 @@ def get_all(
     limit: int = 100,
     search: Optional[str] = None,
     sector: Optional[str] = None,
+    economic_sector_id: Optional[int] = None,
     pm_id: Optional[int] = None,
     sdm_id: Optional[int] = None,
     am_id: Optional[int] = None,
@@ -22,7 +23,9 @@ def get_all(
     
     if search:
         query = query.filter(models.Customer.name.ilike(f"%{search}%"))
-    if sector:
+    if economic_sector_id:
+        query = query.filter(models.Customer.economic_sector_id == economic_sector_id)
+    elif sector:
         query = query.filter(models.Customer.sector == sector)
     if pm_id:
         query = query.filter(models.Customer.pm_id == pm_id)
@@ -31,7 +34,7 @@ def get_all(
     if am_id:
         query = query.filter(models.Customer.ejecutivo_cuenta_id == am_id)
         
-    customers = query.offset(skip).limit(limit).all()
+    customers = query.order_by(models.Customer.name.asc()).offset(skip).limit(limit).all()
     
     for c in customers:
         c.total_contactos = len(c.contacts)

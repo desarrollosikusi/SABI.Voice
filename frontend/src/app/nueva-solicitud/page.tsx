@@ -3,6 +3,19 @@ import { useState, useEffect, useRef } from 'react';
 import { api } from '@/services/api';
 import Link from 'next/link';
 
+function parseJwt(token: string) {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
+      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+    return JSON.parse(jsonPayload);
+  } catch (e) {
+    return null;
+  }
+}
+
 export default function NuevaSolicitudPage() {
   const [formData, setFormData] = useState({
     asunto: '',
@@ -49,8 +62,22 @@ export default function NuevaSolicitudPage() {
   
   const wrapperRef = useRef<HTMLDivElement>(null);
 
+  const [isInternalUser, setIsInternalUser] = useState(true);
+
   useEffect(() => {
     document.body.classList.add('light-theme');
+    
+    // Check if the user is a customer and auto-fill
+    const token = localStorage.getItem('token');
+    if (token) {
+      const payload = parseJwt(token);
+      if (payload && payload.user_type === 'customer') {
+        setIsInternalUser(false);
+        setSelectedCustomer({ id: payload.customer_id, name: 'Mi Empresa' });
+        setSelectedContact({ id: payload.contact_id, email: payload.sub });
+      }
+    }
+
     return () => {
       document.body.classList.remove('light-theme');
     };
@@ -180,59 +207,63 @@ export default function NuevaSolicitudPage() {
             <h2 style={{ marginBottom: 24, fontSize: 20 }}>Datos de la Solicitud</h2>
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               
-              <div ref={wrapperRef} style={{ position: 'relative' }}>
-                <label style={{ display: 'block', marginBottom: 8, fontSize: 14 }}>Cliente / Empresa *</label>
-                {selectedCustomer ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div className="input-field" style={{ flex: 1, backgroundColor: '#f1f5f9', display: 'flex', alignItems: 'center' }}>
-                      {selectedCustomer.name}
-                    </div>
-                    <button type="button" onClick={() => { setSelectedCustomer(null); setCustomerSearch(''); }} className="btn-primary" style={{ padding: '8px', background: 'var(--status-danger)' }}>X</button>
-                  </div>
-                ) : (
-                  <>
-                    <input 
-                      required 
-                      value={customerSearch} 
-                      onChange={(e) => setCustomerSearch(e.target.value)} 
-                      onFocus={() => { if(customers.length > 0) setShowCustomers(true) }}
-                      className="input-field" 
-                      type="text" 
-                      placeholder="Empieza a escribir (Mín 3 caracteres)..." 
-                    />
-                    {showCustomers && customers.length > 0 && (
-                      <ul style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--surface-color)', border: '1px solid var(--surface-border)', borderRadius: '8px', marginTop: '4px', padding: 0, listStyle: 'none', zIndex: 10, maxHeight: '200px', overflowY: 'auto', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
-                        {customers.map((c) => (
-                          <li key={c.id} style={{ padding: '12px 16px', cursor: 'pointer', borderBottom: '1px solid var(--surface-border)' }} 
-                              onClick={() => { setSelectedCustomer(c); setShowCustomers(false); }}>
-                            {c.name}
-                          </li>
-                        ))}
-                      </ul>
+              {isInternalUser && (
+                <>
+                  <div ref={wrapperRef} style={{ position: 'relative' }}>
+                    <label style={{ display: 'block', marginBottom: 8, fontSize: 14 }}>Cliente / Empresa *</label>
+                    {selectedCustomer ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div className="input-field" style={{ flex: 1, backgroundColor: '#f1f5f9', display: 'flex', alignItems: 'center' }}>
+                          {selectedCustomer.name}
+                        </div>
+                        <button type="button" onClick={() => { setSelectedCustomer(null); setCustomerSearch(''); }} className="btn-primary" style={{ padding: '8px', background: 'var(--status-danger)' }}>X</button>
+                      </div>
+                    ) : (
+                      <>
+                        <input 
+                          required={isInternalUser} 
+                          value={customerSearch} 
+                          onChange={(e) => setCustomerSearch(e.target.value)} 
+                          onFocus={() => { if(customers.length > 0) setShowCustomers(true) }}
+                          className="input-field" 
+                          type="text" 
+                          placeholder="Empieza a escribir (Mín 3 caracteres)..." 
+                        />
+                        {showCustomers && customers.length > 0 && (
+                          <ul style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--surface-color)', border: '1px solid var(--surface-border)', borderRadius: '8px', marginTop: '4px', padding: 0, listStyle: 'none', zIndex: 10, maxHeight: '200px', overflowY: 'auto', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
+                            {customers.map((c) => (
+                              <li key={c.id} style={{ padding: '12px 16px', cursor: 'pointer', borderBottom: '1px solid var(--surface-border)' }} 
+                                  onClick={() => { setSelectedCustomer(c); setShowCustomers(false); }}>
+                                {c.name}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </>
                     )}
-                  </>
-                )}
-              </div>
+                  </div>
 
-              <div>
-                <label style={{ display: 'block', marginBottom: 8, fontSize: 14 }}>Correo Electrónico (Personas Autorizadas) *</label>
-                <select 
-                  required 
-                  className="input-field" 
-                  value={selectedContact?.id || ''} 
-                  onChange={(e) => {
-                    const contact = contacts.find(c => c.id.toString() === e.target.value);
-                    setSelectedContact(contact || null);
-                  }}
-                  disabled={!selectedCustomer}
-                >
-                  <option value="" disabled>Seleccione un contacto autorizado</option>
-                  {contacts.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name} ({c.email})</option>
-                  ))}
-                </select>
-                {!selectedCustomer && <p style={{ fontSize: 12, color: 'var(--status-warning)', marginTop: 4 }}>Seleccione un cliente primero</p>}
-              </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: 8, fontSize: 14 }}>Correo Electrónico (Personas Autorizadas) *</label>
+                    <select 
+                      required={isInternalUser} 
+                      className="input-field" 
+                      value={selectedContact?.id || ''} 
+                      onChange={(e) => {
+                        const contact = contacts.find(c => c.id.toString() === e.target.value);
+                        setSelectedContact(contact || null);
+                      }}
+                      disabled={!selectedCustomer}
+                    >
+                      <option value="" disabled>Seleccione un contacto autorizado</option>
+                      {contacts.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name} ({c.email})</option>
+                      ))}
+                    </select>
+                    {!selectedCustomer && <p style={{ fontSize: 12, color: 'var(--status-warning)', marginTop: 4 }}>Seleccione un cliente primero</p>}
+                  </div>
+                </>
+              )}
 
               <div>
                 <label style={{ display: 'block', marginBottom: 8, fontSize: 14 }}>Asunto *</label>

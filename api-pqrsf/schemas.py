@@ -1,5 +1,6 @@
-from pydantic import BaseModel
-from typing import Optional, List
+from pydantic import BaseModel, Field, field_validator, model_validator
+import re
+from typing import Optional, List, Any
 from datetime import datetime, date
 
 class CatalogBase(BaseModel):
@@ -56,6 +57,7 @@ class UserBase(BaseModel):
     email: str
     username: str
     role: str = "Administrador"
+    job_title: Optional[str] = None
     area_id: Optional[int] = None
     is_active: bool = True
 
@@ -85,13 +87,68 @@ class SlaRuleResponse(SlaRuleBase):
     class Config:
         from_attributes = True
 
+class EconomicSectorBase(BaseModel):
+    name: str
+    is_active: bool = True
+    order_index: int = 0
+
+class EconomicSectorResponse(EconomicSectorBase):
+    id: int
+    class Config:
+        from_attributes = True
+
+import re
+
+def normalize_customer_name(v: str) -> str:
+    if not isinstance(v, str):
+        return v
+    words = v.split()
+    normalized_words = []
+    for word in words:
+        # Longitud de caracteres alfabéticos solamente
+        clean_word = re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ]', '', word)
+        alpha_len = len(clean_word)
+        
+        if clean_word.upper() in ["SAS", "SA"]:
+            normalized_words.append(word.upper())
+        elif alpha_len > 3:
+            normalized_words.append(word.capitalize())
+        else:
+            normalized_words.append(word.lower())
+    return " ".join(normalized_words)
+
 class CustomerBase(BaseModel):
     name: str
+
+    @field_validator('name', mode='before')
+    def validate_name(cls, v):
+        return normalize_customer_name(v)
+
+    razon_social: Optional[str] = None
+    document_type: str = "NIT"
     nit: Optional[str] = None
+    
+    @model_validator(mode='before')
+    @classmethod
+    def clean_document(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            nit = data.get('nit')
+            if nit:
+                doc_type = data.get('document_type', 'NIT')
+                if doc_type == 'NIT':
+                    data['nit'] = re.sub(r'\D', '', str(nit))
+                else:
+                    data['nit'] = re.sub(r'[^a-zA-Z0-9]', '', str(nit)).upper()
+        return data
+
     criticality: str = "Estándar"
     sector: Optional[str] = None
+    economic_sector_id: Optional[int] = None
     ciudad: Optional[str] = None
     pais: Optional[str] = None
+    direccion_principal: Optional[str] = None
+    pagina_web: Optional[str] = None
+    telefono_principal: Optional[str] = None
     estado: Optional[str] = None
     fecha_alta_comercial: Optional[date] = None
     ejecutivo_cuenta_id: Optional[int] = None
@@ -110,11 +167,51 @@ class CustomerBase(BaseModel):
 class CustomerCreate(CustomerBase):
     pass
 
+class CustomerUpdate(BaseModel):
+    name: Optional[str] = None
+
+    @field_validator('name', mode='before')
+    def validate_name(cls, v):
+        return normalize_customer_name(v) if v is not None else v
+
+    razon_social: Optional[str] = None
+    document_type: Optional[str] = None
+    nit: Optional[str] = None
+    
+    @model_validator(mode='before')
+    @classmethod
+    def clean_document(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            nit = data.get('nit')
+            if nit is not None:
+                # If document_type isn't in update, we assume it's NIT or we strip what we can.
+                doc_type = data.get('document_type', 'NIT')
+                if doc_type == 'NIT':
+                    data['nit'] = re.sub(r'\D', '', str(nit))
+                else:
+                    data['nit'] = re.sub(r'[^a-zA-Z0-9]', '', str(nit)).upper()
+        return data
+
+    estado: Optional[str] = None
+    ciudad: Optional[str] = None
+    pais: Optional[str] = None
+    direccion_principal: Optional[str] = None
+    pagina_web: Optional[str] = None
+    telefono_principal: Optional[str] = None
+    fecha_alta_comercial: Optional[date] = None
+    economic_sector_id: Optional[int] = None
+    pm_id: Optional[int] = None
+    sdm_id: Optional[int] = None
+    ejecutivo_cuenta_id: Optional[int] = None
+    notas_relacionamiento: Optional[str] = None
+    is_active: Optional[bool] = None
+
 class CustomerResponse(CustomerBase):
     id: int
     ejecutivo_cuenta: Optional[UserResponse] = None
     pm: Optional[UserResponse] = None
     sdm: Optional[UserResponse] = None
+    economic_sector: Optional[EconomicSectorResponse] = None
     
     # Extended metrics
     total_contactos: Optional[int] = None
@@ -146,9 +243,32 @@ class ContactBase(BaseModel):
     is_active: bool = True
     receives_notifications: bool = True
     authorized_for_pqrsf: bool = True
+    additional_data: Optional[dict] = None
 
-class ContactCreate(ContactBase):
-    pass
+    @field_validator('name', mode='before')
+    @classmethod
+    def strip_whitespace_name(cls, v):
+        if isinstance(v, str):
+            v = v.strip()
+            if not v:
+                raise ValueError("El nombre no puede estar vacío")
+        return v
+
+    @field_validator('email', mode='before')
+    @classmethod
+    def normalize_email(cls, v):
+        if isinstance(v, str):
+            v = v.strip().lower()
+            if not re.match(r"[^@]+@[^@]+\.[^@]+", v):
+                raise ValueError("Formato de correo inválido")
+        return v
+
+    @field_validator('phone', 'celular', mode='before')
+    @classmethod
+    def sanitize_phone(cls, v):
+        if isinstance(v, str):
+            v = re.sub(r'[^\d+]', '', v)
+        return v
 
 class ContactUpdate(BaseModel):
     name: Optional[str] = None
@@ -162,8 +282,76 @@ class ContactUpdate(BaseModel):
     idioma: Optional[str] = None
     medio_preferido: Optional[str] = None
 
+class ContactCreate(ContactBase):
+    pass
+
+class ContactUpdateAdmin(BaseModel):
+    name: Optional[str] = None
+    apellidos: Optional[str] = None
+    cargo: Optional[str] = None
+    area: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    celular: Optional[str] = None
+    fecha_nacimiento: Optional[date] = None
+    idioma: Optional[str] = None
+    medio_preferido: Optional[str] = None
+    recibir_comunicaciones: Optional[bool] = None
+    notas_relacionamiento: Optional[str] = None
+    es_principal: Optional[bool] = None
+    es_tecnico: Optional[bool] = None
+    es_administrativo: Optional[bool] = None
+    es_comercial: Optional[bool] = None
+    receives_notifications: Optional[bool] = None
+    authorized_for_pqrsf: Optional[bool] = None
+    additional_data: Optional[dict] = None
+
+    @field_validator('name', mode='before')
+    @classmethod
+    def strip_whitespace_name(cls, v):
+        if isinstance(v, str):
+            v = v.strip()
+            if not v:
+                raise ValueError("El nombre no puede estar vacío")
+        return v
+
+    @field_validator('email', mode='before')
+    @classmethod
+    def normalize_email(cls, v):
+        if isinstance(v, str):
+            v = v.strip().lower()
+            if not re.match(r"[^@]+@[^@]+\.[^@]+", v):
+                raise ValueError("Formato de correo inválido")
+        return v
+
+    @field_validator('phone', 'celular', mode='before')
+    @classmethod
+    def sanitize_phone(cls, v):
+        if isinstance(v, str):
+            v = re.sub(r'[^\d+]', '', v)
+        return v
+
+class ContactDeactivate(BaseModel):
+    deactivation_reporter: str
+    deactivation_support: str
+
 class ContactResponse(ContactBase):
     id: int
+    functional_id: Optional[str] = None
+    deactivation_reporter: Optional[str] = None
+    deactivation_support: Optional[str] = None
+    deactivation_date: Optional[datetime] = None
+    class Config:
+        from_attributes = True
+
+class ContactHistoryResponse(BaseModel):
+    id: int
+    contact_id: int
+    user_id: Optional[int] = None
+    field_name: str
+    old_value: Optional[str] = None
+    new_value: Optional[str] = None
+    changed_at: datetime
     class Config:
         from_attributes = True
 
