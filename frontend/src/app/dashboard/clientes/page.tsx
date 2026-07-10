@@ -144,12 +144,12 @@ export default function ClientesList() {
     { 
       key: 'contacts_count', 
       label: 'Contactos',
-      render: (row: any) => row.contacts_count || 0
+      render: (row: any) => row.total_contactos || 0
     },
     { 
       key: 'active_cases', 
       label: 'Casos Activos',
-      render: (row: any) => row.open_cases || 0
+      render: (row: any) => row.pqrsf_abiertas || 0
     }
   ];
 

@@ -37,7 +37,7 @@ def get_all(
     customers = query.order_by(models.Customer.name.asc()).offset(skip).limit(limit).all()
     
     for c in customers:
-        c.total_contactos = len(c.contacts)
+        c.total_contactos = sum(1 for contact in c.contacts if contact.is_active)
         c.pqrsf_abiertas = sum(1 for p in c.pqrsfs if p.estado and not p.estado.is_final and p.estado.name != 'Cancelado')
         if c.pqrsfs:
             latest = max(c.pqrsfs, key=lambda p: p.fecha_creacion)
