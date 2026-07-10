@@ -3,8 +3,11 @@ import { useEffect } from 'react';
 import { logout } from '@/services/api';
 import { usePathname } from 'next/navigation';
 
+import { useToast } from '@/contexts/ToastContext';
+
 export default function SessionManager() {
   const pathname = usePathname();
+  const { warning } = useToast();
 
   useEffect(() => {
     // No timeout on login pages
@@ -16,7 +19,7 @@ export default function SessionManager() {
       clearTimeout(timeoutId);
       // 30 minutes idle timeout
       timeoutId = setTimeout(() => {
-        alert("Su sesión ha expirado por inactividad.");
+        warning("Su sesión ha expirado por inactividad.");
         logout();
       }, 30 * 60 * 1000);
     };

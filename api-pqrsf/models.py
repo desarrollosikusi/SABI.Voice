@@ -240,9 +240,38 @@ class WorkflowTransition(Base):
     from_state_id = Column(Integer, ForeignKey("workflow_states.id"))
     to_state_id = Column(Integer, ForeignKey("workflow_states.id"))
     allowed_roles = Column(String(255))
-    
+    require_note = Column(Boolean, default=False)
+    require_assignment = Column(Boolean, default=False)
+    require_evidence = Column(Boolean, default=False)
+    is_active = Column(Boolean, default=True)
     from_state = relationship("WorkflowState", foreign_keys=[from_state_id])
     to_state = relationship("WorkflowState", foreign_keys=[to_state_id])
+
+class OperationalRule(Base):
+    __tablename__ = "operational_rules"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(150), nullable=False)
+    description = Column(Text)
+    priority = Column(Integer, default=100)
+    is_active = Column(Boolean, default=True)
+    
+    # Rules as Data
+    entity_type = Column(String(50), default="pqrsf")  # e.g., "pqrsf", "customer"
+    conditions = Column(JSON, nullable=False)          # Abstract JSON syntax tree for conditions
+    action_type = Column(String(50), nullable=False)   # e.g., "PUBLISH_EVENT", "TRANSITION_STATE"
+    action_payload = Column(JSON, nullable=False)      # Payload to execute the action
+
+class RuleExecutionLog(Base):
+    __tablename__ = "rule_execution_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    rule_id = Column(Integer, ForeignKey("operational_rules.id", ondelete="CASCADE"), nullable=False)
+    entity_type = Column(String(50), nullable=False)
+    entity_id = Column(Integer, nullable=False)
+    workflow_version = Column(String(50), nullable=True)
+    execution_window = Column(String(50), nullable=False) # e.g., "2024-05-12T10" 
+    executed_at = Column(DateTime, default=datetime.datetime.utcnow)
+    
+    rule = relationship("OperationalRule")
 
 class WorkflowStateVisibility(Base):
     __tablename__ = "workflow_state_visibility"
@@ -459,3 +488,32 @@ class CaseStatusHistory(Base):
     estado_anterior = relationship("WorkflowState", foreign_keys=[estado_anterior_id])
     estado_nuevo = relationship("WorkflowState", foreign_keys=[estado_nuevo_id])
     usuario = relationship("User", foreign_keys=[usuario_id])
+
+class OperationalEvent(Base):
+    __tablename__ = "operational_events"
+    id = Column(Integer, primary_key=True, index=True)
+    event_type = Column(String(100), nullable=False) # e.g. PQRSF_CREATED, SLA_DUE, IA_RISK
+    origin = Column(String(50), nullable=False) # e.g. PQRSF, IA, PLANVIEW, DIRECTORY
+    severity = Column(String(50), nullable=False) # e.g. Crítico, Alto, Medio, Informativo
+    status = Column(String(50), default="active") # active, resolved, dismissed
+    channel = Column(String(50), nullable=True) # e.g. notification, command_center, teams, all
+    entity_type = Column(String(50), nullable=True) # e.g. pqrsf, customer, contract
+    entity_id = Column(Integer, nullable=True) # e.g. 148
+    customer_id = Column(Integer, ForeignKey("customers.id", ondelete="CASCADE"), nullable=True)
+    payload = Column(JSON, nullable=True) # Stores dynamic data for the event (title, description, recommended_action, etc.)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    customer = relationship("Customer")
+    receipts = relationship("EventReceipt", back_populates="event", cascade="all, delete-orphan")
+
+class EventReceipt(Base):
+    __tablename__ = "event_receipts"
+    id = Column(Integer, primary_key=True, index=True)
+    event_id = Column(Integer, ForeignKey("operational_events.id", ondelete="CASCADE"))
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
+    read_at = Column(DateTime, nullable=True)
+    archived_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    event = relationship("OperationalEvent", back_populates="receipts")
+    user = relationship("User")

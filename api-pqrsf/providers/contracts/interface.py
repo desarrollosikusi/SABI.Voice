@@ -6,7 +6,19 @@ class IContractProvider(ABC):
     @abstractmethod
     def get_customer_contracts(self, customer_id: int, filters: Optional[dict] = None) -> List[ContractResponse]:
         """
-        Retrieves all contracts associated with a customer from the external system.
+        [Contrato de Integración S2-B]
+        Entradas:
+            - customer_id (int): ID local del cliente a consultar.
+            - filters (dict): Filtros opcionales (ej. status="Activo").
+        Salidas:
+            - List[ContractResponse]: Lista de contratos DTO normalizados. Lista vacía si no hay coincidencias.
+        Excepciones esperadas:
+            - ValueError si el ID de cliente no es válido o no tiene mapeo externo.
+            - CircuitBreakerOpenException si Planview falla (5xx o timeout).
+        Tiempos máximos (SLA):
+            - 2000ms max.
+        Comportamiento Degradado:
+            - Si el proveedor falla, la UI debe recibir un CircuitBreakerOpenException o una lista parcial cacheadas.
         """
         pass
     

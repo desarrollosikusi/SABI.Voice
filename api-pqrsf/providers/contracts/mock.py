@@ -1,7 +1,10 @@
 from typing import List, Optional
+import time
 from datetime import date, datetime, timedelta
 from contract_schemas import ContractResponse, ContractMetrics, IntegrationStatus, ContractTypeEnum, ContractHealthEnum
 from providers.contracts.interface import IContractProvider
+from providers.circuit_breaker import cache_response
+from providers.telemetry import observe_provider
 
 class MockContractProvider(IContractProvider):
     def __init__(self):
@@ -85,8 +88,10 @@ class MockContractProvider(IContractProvider):
             )
         ]
 
+    @cache_response(ttl_seconds=10)
+    @observe_provider("Mock Planview")
     def get_customer_contracts(self, customer_id: int, filters: Optional[dict] = None) -> List[ContractResponse]:
-        # Return a copy of mock data with the customer_id assigned
+        time.sleep(1.5) # Simulated UI delay
         results = []
         for contract in self.mock_data:
             c = contract.model_copy()
@@ -94,7 +99,9 @@ class MockContractProvider(IContractProvider):
             results.append(c)
         return results
 
+    @cache_response(ttl_seconds=10)
     def get_contract(self, external_id: str) -> ContractResponse:
+        time.sleep(0.5) # Simulated UI delay
         for contract in self.mock_data:
             if contract.external_id == external_id:
                 return contract

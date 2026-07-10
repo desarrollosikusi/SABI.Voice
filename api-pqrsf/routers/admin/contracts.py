@@ -7,9 +7,8 @@ from providers.contracts.mock import MockContractProvider
 
 router = APIRouter()
 
-# Dependency Injection: In the future, this can dynamically return Mock or Planview based on env vars
-def get_contract_provider():
-    return MockContractProvider()
+from providers.dependencies import get_contract_provider
+from providers.contracts.interface import IContractProvider
 
 @router.get("/customers/{customer_id}/contracts", response_model=List[ContractResponse])
 def get_customer_contracts(
@@ -17,7 +16,7 @@ def get_customer_contracts(
     status: Optional[str] = None,
     contract_type: Optional[str] = None,
     architecture: Optional[str] = None,
-    provider: MockContractProvider = Depends(get_contract_provider),
+    provider: IContractProvider = Depends(get_contract_provider),
     current_user: models.User = Depends(auth.get_current_user)
 ):
     filters = {
@@ -30,14 +29,14 @@ def get_customer_contracts(
 @router.get("/customers/{customer_id}/contracts/metrics", response_model=ContractMetrics)
 def get_customer_contract_metrics(
     customer_id: int,
-    provider: MockContractProvider = Depends(get_contract_provider),
+    provider: IContractProvider = Depends(get_contract_provider),
     current_user: models.User = Depends(auth.get_current_user)
 ):
     return provider.get_customer_metrics(customer_id)
 
 @router.get("/contracts/integration-status", response_model=IntegrationStatus)
 def get_integration_status(
-    provider: MockContractProvider = Depends(get_contract_provider),
+    provider: IContractProvider = Depends(get_contract_provider),
     current_user: models.User = Depends(auth.get_current_user)
 ):
     return provider.get_integration_status()
@@ -45,7 +44,7 @@ def get_integration_status(
 @router.get("/contracts/{external_id}", response_model=ContractResponse)
 def get_contract_details(
     external_id: str,
-    provider: MockContractProvider = Depends(get_contract_provider),
+    provider: IContractProvider = Depends(get_contract_provider),
     current_user: models.User = Depends(auth.get_current_user)
 ):
     try:

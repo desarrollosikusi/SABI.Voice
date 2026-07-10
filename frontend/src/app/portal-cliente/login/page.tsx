@@ -15,8 +15,8 @@ export default function CustomerLoginPage() {
     setErrorMsg('');
     try {
       const resp = await api.login(email, password);
-      localStorage.setItem('token', resp.access_token);
-      router.push('/portal-cliente');
+      // Cookie is set by backend automatically
+      window.location.href = '/portal-cliente';
     } catch (err) {
       setErrorMsg("Credenciales incorrectas o contacto no autorizado.");
     }

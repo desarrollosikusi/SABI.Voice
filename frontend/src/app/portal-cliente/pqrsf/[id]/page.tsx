@@ -3,8 +3,10 @@ import { useEffect, useState, useRef } from 'react';
 import { api } from '@/services/api';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useToast } from '@/contexts/ToastContext';
 
 export default function CustomerCaseDetail({ params }: { params: { id: string } }) {
+  const { error: toastError, success: toastSuccess } = useToast();
   const [pqrsf, setPqrsf] = useState<any>(null);
   const [communications, setCommunications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -27,9 +29,9 @@ export default function CustomerCaseDetail({ params }: { params: { id: string } 
       ]);
       setPqrsf(caseData);
       setCommunications(commsData);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Error al cargar la información. Redirigiendo...");
+      toastError(err.message || "Error al cargar la información. Redirigiendo...");
       window.location.href = '/portal-cliente';
     } finally {
       setLoading(false);
@@ -50,9 +52,10 @@ export default function CustomerCaseDetail({ params }: { params: { id: string } 
       });
       setMessage('');
       fetchData(); // reload messages
-    } catch (err) {
+      toastSuccess("Mensaje enviado exitosamente");
+    } catch (err: any) {
       console.error(err);
-      alert("Error al enviar el mensaje");
+      toastError(err.message || "Error al enviar el mensaje");
     }
   };
 

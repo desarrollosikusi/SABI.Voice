@@ -460,7 +460,6 @@ class PqrsfCreate(PqrsfBase):
     pass
 
 class PqrsfUpdate(BaseModel):
-    estado_id: Optional[int] = None
     tipo_id: Optional[int] = None
     area_id: Optional[int] = None
     arquitectura_id: Optional[int] = None
@@ -468,6 +467,7 @@ class PqrsfUpdate(BaseModel):
     sentimiento_id: Optional[int] = None
     causa_probable_id: Optional[int] = None
     categoria_causa_id: Optional[int] = None
+    estado_id: Optional[int] = None
     area_responsable_id: Optional[int] = None
     responsable_id: Optional[int] = None
     impacto: Optional[str] = None
@@ -475,6 +475,7 @@ class PqrsfUpdate(BaseModel):
     resumen: Optional[str] = None
     recomendacion: Optional[str] = None
     motivo_cambio: Optional[str] = None
+    nueva_nota: Optional[str] = None
 
 class PqrsfReplyCreate(BaseModel):
     respuesta_cliente: str
@@ -493,7 +494,7 @@ class PqrsfResponse(PqrsfBase):
     fecha_respuesta: Optional[datetime] = None
     respondido_por_id: Optional[int] = None
     
-    # Embedded catalog objects
+    # Embedded catalog objects (legacy, kept for backwards compatibility)
     tipo_rel: Optional[PqrsfTypeResponse] = None
     area_rel: Optional[CatalogResponse] = None
     arquitectura_rel: Optional[CatalogResponse] = None
@@ -503,6 +504,11 @@ class PqrsfResponse(PqrsfBase):
     categoria_causa_rel: Optional[CatalogResponse] = None
     sentimiento_rel: Optional[CatalogResponse] = None
     area_responsable_rel: Optional[CatalogResponse] = None
+    
+    # New Standard Embedded objects
+    customer: Optional[CustomerResponse] = None
+    contact: Optional[ContactResponse] = None
+    responsable: Optional[UserResponse] = None
     
     attachments: List[PqrsfAttachmentResponse] = []
     history: List[PqrsfHistoryResponse] = []
@@ -616,9 +622,29 @@ class CaseCommunicationResponse(CaseCommunicationBase):
     read_at: Optional[datetime] = None
     read_by: Optional[int] = None
     attachments: List[CommunicationAttachmentResponse] = []
-    
+
     class Config:
         from_attributes = True
+
+# ==========================================
+# WORKFLOW TRANSITION SCHEMAS
+# ==========================================
+
+class WorkflowTransitionResponse(BaseModel):
+    id: int
+    from_state_id: int
+    to_state_id: int
+    to_state_name: str
+    allowed_roles: str
+    require_note: bool
+    require_assignment: bool
+    require_evidence: bool
+
+class PqrsfTransitionRequest(BaseModel):
+    to_state_id: int
+    note: Optional[str] = None
+    assigned_to: Optional[int] = None
+    evidence_url: Optional[str] = None
 
 class CaseStatusHistoryBase(BaseModel):
     estado_anterior_id: Optional[int] = None

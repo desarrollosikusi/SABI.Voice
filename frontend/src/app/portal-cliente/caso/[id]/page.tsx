@@ -7,8 +7,10 @@ import Card from '@/components/ui/Card';
 import StatusBadge from '@/components/StatusBadge';
 import ConversationBubble from '@/components/ConversationBubble';
 import { useParams } from 'next/navigation';
+import { useToast } from '@/contexts/ToastContext';
 
 export default function CustomerCaseDetail() {
+  const { error: toastError, success: toastSuccess, warning } = useToast();
   const params = useParams();
   const pqrsfId = params.id as string;
 
@@ -52,9 +54,10 @@ export default function CustomerCaseDetail() {
       setReplyMessage('');
       // Update last updated date locally
       setPqrsf({ ...pqrsf, fecha_ultima_actualizacion: newComm.fecha });
+      toastSuccess("Respuesta enviada exitosamente.");
     } catch (err: any) {
       console.error(err);
-      alert('Error al enviar la respuesta: ' + err.message);
+      toastError(err.message || "Error al enviar la respuesta");
     } finally {
       setIsSubmitting(false);
     }

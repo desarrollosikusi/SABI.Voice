@@ -3,7 +3,8 @@ from sqlalchemy import func, or_
 import models
 import schemas
 from datetime import datetime, timedelta
-from notifications.provider import get_notification_provider
+from typing import Optional, List, Dict, Any
+from notifications.provider import get_event_publisher, OperationalEventPayload
 
 def get_user_by_username(db: Session, username: str):
     return db.query(models.User).filter(models.User.username == username).first()
@@ -41,8 +42,16 @@ def create_case_communication(db: Session, pqrsf_id: int, comm_data: schemas.Cas
     db.commit()
     db.refresh(db_comm)
 
-    provider = get_notification_provider()
-    provider.send("Sistema", f"CommunicationCreatedEvent: {pqrsf_id}", f"Nueva comunicación de tipo {db_comm.tipo} en canal {db_comm.canal}.")
+    publisher = get_event_publisher(db)
+    publisher.publish(OperationalEventPayload(
+        event_type="COMMUNICATION_CREATED",
+        origin="USER",
+        severity="Baja",
+        title=f"Nueva Comunicación en Caso {pqrsf_id}",
+        description=f"Se ha agregado una nota de tipo {db_comm.tipo}.",
+        entity_type="pqrsf",
+        entity_id=pqrsf_id
+    ))
 
     return db_comm
 
@@ -153,7 +162,18 @@ def create_comment(db: Session, pqrsf_id: int, user_id: int, comment: str):
     add_history(db, pqrsf_id, "Comentario", "Nuevo comentario interno añadido", user_id)
     return db_comment
 
-def get_pqrsf(db: Session, skip: int = 0, limit: int = 100, area_id: int = None):
+def get_pqrsf(
+    db: Session, 
+    skip: int = 0, 
+    limit: int = 100, 
+    area_id: Optional[int] = None,
+    customer_id: Optional[int] = None,
+    status_id: Optional[int] = None,
+    priority_id: Optional[int] = None,
+    assigned_to: Optional[int] = None,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None
+):
     # Actualizar estado SLA antes de devolver
     now = datetime.utcnow()
     
@@ -169,6 +189,27 @@ def get_pqrsf(db: Session, skip: int = 0, limit: int = 100, area_id: int = None)
     query = db.query(models.Pqrsf)
     if area_id:
         query = query.filter(models.Pqrsf.area_responsable_id == area_id)
+    if customer_id:
+        query = query.filter(models.Pqrsf.cliente_id == customer_id)
+    if status_id:
+        query = query.filter(models.Pqrsf.estado_id == status_id)
+    if priority_id:
+        query = query.filter(models.Pqrsf.prioridad_id == priority_id)
+    if assigned_to:
+        query = query.filter(models.Pqrsf.responsable_id == assigned_to)
+    
+    if from_date:
+        try:
+            fd = datetime.fromisoformat(from_date)
+            query = query.filter(models.Pqrsf.fecha_creacion >= fd)
+        except ValueError:
+            pass
+    if to_date:
+        try:
+            td = datetime.fromisoformat(to_date)
+            query = query.filter(models.Pqrsf.fecha_creacion <= td)
+        except ValueError:
+            pass
         
     return query.order_by(models.Pqrsf.fecha_creacion.desc()).offset(skip).limit(limit).all()
 
@@ -192,11 +233,12 @@ def update_pqrsf(db: Session, pqrsf_id: int, update_data: schemas.PqrsfUpdate, u
     
     data_dict = update_data.model_dump(exclude_unset=True)
     motivo_cambio = data_dict.pop("motivo_cambio", "Actualización desde consola operativa")
+    nueva_nota = data_dict.pop("nueva_nota", None)
     
     classification_fields = ['tipo_id', 'area_id', 'arquitectura_id', 'prioridad_id', 'sentimiento_id', 'causa_probable_id', 'categoria_causa_id', 'impacto', 'riesgo', 'resumen', 'recomendacion', 'area_responsable_id']
     is_classification_changed = False
     
-    provider = get_notification_provider()
+    publisher = get_event_publisher(db)
     
     for key, value in data_dict.items():
         old_val = getattr(db_pqrsf, key)
@@ -212,65 +254,24 @@ def update_pqrsf(db: Session, pqrsf_id: int, update_data: schemas.PqrsfUpdate, u
                 # Notify new responsible
                 new_resp = db.query(models.User).filter(models.User.id == value).first()
                 if new_resp:
-                    provider.send(new_resp.username, f"Asignación de Caso: {db_pqrsf.consecutivo}", f"El caso {db_pqrsf.consecutivo} te ha sido asignado.")
+                    publisher.publish(OperationalEventPayload(
+                        event_type="CASE_ASSIGNED",
+                        origin="SYSTEM",
+                        severity="Media",
+                        title=f"Asignación de Caso: {db_pqrsf.consecutivo}",
+                        description=f"El caso {db_pqrsf.consecutivo} te ha sido asignado.",
+                        entity_type="pqrsf",
+                        entity_id=db_pqrsf.id,
+                        recipients=[new_resp.id]
+                    ))
             
-    if "estado_id" in data_dict and data_dict["estado_id"] != db_pqrsf.estado_id:
-        new_state_id = data_dict["estado_id"]
-        old_state_id = db_pqrsf.estado_id
+    if "estado_id" in data_dict:
+        # En S3-02 el estado_id ya NO se puede cambiar por el update general,
+        # debe pasar forzosamente por execute_pqrsf_transition en WorkflowService.
+        data_dict.pop("estado_id")
         
-        # Verify workflow transition
-        old_state = db.query(models.WorkflowState).filter(models.WorkflowState.id == old_state_id).first()
-        new_state = db.query(models.WorkflowState).filter(models.WorkflowState.id == new_state_id).first()
-        
-        if old_state and new_state:
-            transition = db.query(models.WorkflowTransition).filter(
-                models.WorkflowTransition.from_state_id == old_state.id,
-                models.WorkflowTransition.to_state_id == new_state.id
-            ).first()
-            
-            if not transition:
-                pass # Skipping strict enforcement for now during MVP migration
-                # raise ValueError(f"Transición de estado no permitida por el Workflow: {old_state.name} -> {new_state.name}")
-            
-        # Calculate time spent in previous state
-        last_history = db.query(models.CaseStatusHistory).filter(
-            models.CaseStatusHistory.pqrsf_id == db_pqrsf.id
-        ).order_by(models.CaseStatusHistory.fecha.desc()).first()
-        
-        tiempo_permanencia = None
-        if last_history:
-            tiempo_permanencia = int((datetime.utcnow() - last_history.fecha).total_seconds() / 60)
-        else:
-            tiempo_permanencia = int((datetime.utcnow() - db_pqrsf.fecha_creacion).total_seconds() / 60)
-
-        # Record CaseStatusHistory
-        status_history = models.CaseStatusHistory(
-            pqrsf_id=db_pqrsf.id,
-            estado_anterior_id=old_state_id,
-            estado_nuevo_id=new_state_id,
-            usuario_id=user_id,
-            motivo=motivo_cambio,
-            tiempo_permanencia_minutos=tiempo_permanencia
-        )
-        db.add(status_history)
-
-        provider.send("Administrador", f"CaseStatusChangedEvent: {db_pqrsf.consecutivo}", f"El caso {db_pqrsf.consecutivo} ha cambiado a {new_state.name if new_state else 'None'} por motivo: {motivo_cambio}")
-            
-        if new_state and (new_state.is_final or new_state.name in ["Cerrado", "Cancelado"]):
-            db_pqrsf.fecha_cierre = datetime.utcnow()
-            
-            # Create Knowledge Article if resolved/closed with AI recommendations
-            if new_state.name == "Cerrado" and db_pqrsf.causa_probable_id and (db_pqrsf.recomendacion or db_pqrsf.accion_recomendada):
-                article = models.KnowledgeArticle(
-                    title=db_pqrsf.asunto or f"Caso {db_pqrsf.consecutivo}",
-                    content=db_pqrsf.recomendacion or db_pqrsf.accion_recomendada,
-                    arquitectura_id=db_pqrsf.arquitectura_id,
-                    area_id=db_pqrsf.area_responsable_id,
-                    source_pqrsf_id=db_pqrsf.id
-                )
-                db.add(article)
-
-        
+    # The logic that closed cases and created knowledge articles is now part of WorkflowEngine or should be evaluated differently, 
+    # but to avoid breaking things, we just commit remaining values here.
     if "tipo_id" in data_dict or "prioridad_id" in data_dict:
         # Recalcular SLA
         horas, vencimiento = calculate_sla(db, db_pqrsf.tipo_id, db_pqrsf.prioridad_id)
@@ -301,6 +302,20 @@ def update_pqrsf(db: Session, pqrsf_id: int, update_data: schemas.PqrsfUpdate, u
             reason=motivo_cambio
         )
         db.add(feedback)
+
+    if nueva_nota:
+        # Registrar como Nota Interna Operativa
+        nota_comm = models.CaseCommunication(
+            pqrsf_id=db_pqrsf.id,
+            tipo="Operación",
+            message_type="Nota interna",
+            direccion="Saliente",
+            canal="Portal",
+            mensaje=nueva_nota,
+            autor_usuario_id=user_id,
+            visible_cliente=False
+        )
+        db.add(nota_comm)
 
     db.commit()
     db.refresh(db_pqrsf)

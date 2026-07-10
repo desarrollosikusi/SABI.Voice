@@ -1,12 +1,13 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { api } from '@/services/api';
+import { useToast } from '@/contexts/ToastContext';
 
 export default function MiPerfil() {
+  const { success: toastSuccess, error: toastError } = useToast();
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [success, setSuccess] = useState('');
 
   // Editable fields allowed
   const [formData, setFormData] = useState({
@@ -60,7 +61,7 @@ export default function MiPerfil() {
       }
       
       await api.updateCustomerMe(payload);
-      setSuccess('Perfil actualizado exitosamente.');
+      toastSuccess('Perfil actualizado exitosamente.');
       
       // Update local storage name if it was changed so the top bar updates too
       if (typeof window !== 'undefined') {
@@ -68,7 +69,7 @@ export default function MiPerfil() {
       }
     } catch (err: any) {
       console.error(err);
-      alert('Hubo un error al actualizar el perfil.');
+      toastError(err.message || 'Hubo un error al actualizar el perfil.');
     } finally {
       setSaving(false);
     }
@@ -82,12 +83,6 @@ export default function MiPerfil() {
     <div style={{ padding: '24px', maxWidth: '800px', margin: '0 auto' }}>
       <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8, color: 'var(--text-primary)' }}>Mi Perfil</h1>
       <p style={{ color: 'var(--text-secondary)', marginBottom: 24 }}>Gestiona tu información personal y preferencias de contacto.</p>
-
-      {success && (
-        <div style={{ padding: 12, backgroundColor: '#dcfce3', color: '#166534', borderRadius: 8, marginBottom: 24 }}>
-          {success}
-        </div>
-      )}
 
       <form onSubmit={handleSave} style={{ background: 'white', padding: 24, borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
         <h3 style={{ borderBottom: '1px solid var(--surface-border)', paddingBottom: 12, marginBottom: 20 }}>Información Personal</h3>

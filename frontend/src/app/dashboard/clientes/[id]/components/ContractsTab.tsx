@@ -13,6 +13,7 @@ export default function ContractsTab({ customerId }: ContractsTabProps) {
   const [metrics, setMetrics] = useState<any>(null);
   const [integrationStatus, setIntegrationStatus] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Filters
   const [filterType, setFilterType] = useState('');
@@ -24,6 +25,7 @@ export default function ContractsTab({ customerId }: ContractsTabProps) {
 
   const loadContractsData = async () => {
     setLoading(true);
+    setError(null);
     try {
       const [contractsData, metricsData, statusData] = await Promise.all([
         api.getCustomerContracts(customerId, {
@@ -36,8 +38,9 @@ export default function ContractsTab({ customerId }: ContractsTabProps) {
       setContracts(contractsData);
       setMetrics(metricsData);
       setIntegrationStatus(statusData);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error loading contracts data:", err);
+      setError("El servicio de contratos no está disponible en este momento. Por favor, intente más tarde.");
     } finally {
       setLoading(false);
     }
@@ -96,7 +99,31 @@ export default function ContractsTab({ customerId }: ContractsTabProps) {
   ];
 
   if (loading) {
-    return <div style={{ padding: '20px', textAlign: 'center' }}>Cargando información de contratos...</div>;
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        {/* Skeleton for Integration Status */}
+        <div style={{ height: '44px', backgroundColor: '#e2e8f0', borderRadius: '8px', animation: 'pulse 1.5s infinite' }}></div>
+        {/* Skeleton for Metrics */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+          {[1,2,3,4].map(i => <div key={i} style={{ height: '110px', backgroundColor: '#e2e8f0', borderRadius: '8px', animation: 'pulse 1.5s infinite' }}></div>)}
+        </div>
+        {/* Skeleton for Filters & Table */}
+        <div style={{ height: '40px', width: '300px', backgroundColor: '#e2e8f0', borderRadius: '4px', animation: 'pulse 1.5s infinite' }}></div>
+        <div style={{ height: '300px', backgroundColor: '#e2e8f0', borderRadius: '8px', animation: 'pulse 1.5s infinite' }}></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{ padding: '40px', textAlign: 'center', backgroundColor: '#fee2e2', borderRadius: '8px', border: '1px solid #f87171' }}>
+        <h3 style={{ color: '#991b1b', marginBottom: '8px' }}>Atención</h3>
+        <p style={{ color: '#b91c1c', margin: 0 }}>{error}</p>
+        <button onClick={loadContractsData} style={{ marginTop: '16px', padding: '8px 16px', background: '#991b1b', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+          Reintentar
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -167,10 +194,18 @@ export default function ContractsTab({ customerId }: ContractsTabProps) {
           </select>
         </div>
 
-        <DataTable 
-          data={contracts}
-          columns={columns}
-        />
+        {contracts.length === 0 ? (
+          <div style={{ padding: '40px', textAlign: 'center', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px dashed #cbd5e1' }}>
+            <div style={{ fontSize: '2rem', marginBottom: '16px' }}>📄</div>
+            <h3 style={{ margin: '0 0 8px 0', color: '#475569' }}>No hay contratos</h3>
+            <p style={{ color: '#64748b', margin: 0 }}>No se encontraron contratos para este cliente con los filtros seleccionados.</p>
+          </div>
+        ) : (
+          <DataTable 
+            data={contracts}
+            columns={columns}
+          />
+        )}
       </div>
     </div>
   );

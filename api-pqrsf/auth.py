@@ -4,11 +4,13 @@ from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status, Request
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import OAuth2
+from fastapi.openapi.models import OAuthFlows as OAuthFlowsModel
+from fastapi.security.utils import get_authorization_scheme_param
 from sqlalchemy.orm import Session
 import models
 from database import get_db
-from notifications.provider import get_notification_provider
+from notifications.provider import get_event_publisher, OperationalEventPayload
 
 SECRET_KEY = os.getenv("JWT_SECRET", "supersecretkey")
 ALGORITHM = "HS256"
@@ -28,7 +30,19 @@ def check_rate_limit(request: Request):
         
     if ip in _login_attempts:
         if _login_attempts[ip]['attempts'] >= 5:
-            get_notification_provider().send("Seguridad", "CustomerLoginFailed", f"Rate limit excedido para IP {ip}")
+            from database import SessionLocal
+            db = SessionLocal()
+            try:
+                get_event_publisher(db).publish(OperationalEventPayload(
+                    event_type="RATE_LIMIT_EXCEEDED",
+                    origin="SECURITY",
+                    severity="Alta",
+                    title="Alerta de Seguridad",
+                    description=f"Rate limit excedido para IP {ip}",
+                    channel="all"
+                ))
+            finally:
+                db.close()
             raise HTTPException(status_code=429, detail="Demasiados intentos. Intente nuevamente en 15 minutos.")
         _login_attempts[ip]['attempts'] += 1
     else:
@@ -38,7 +52,26 @@ def check_rate_limit(request: Request):
 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
+class OAuth2PasswordBearerWithCookie(OAuth2):
+    def __init__(self, tokenUrl: str, scheme_name: Optional[str] = None, auto_error: bool = True):
+        flows = OAuthFlowsModel(password={"tokenUrl": tokenUrl, "scopes": {}})
+        super().__init__(flows=flows, scheme_name=scheme_name, auto_error=auto_error)
+
+    async def __call__(self, request: Request) -> Optional[str]:
+        token = request.cookies.get("access_token")
+        
+        if not token:
+            authorization = request.headers.get("Authorization")
+            if authorization and authorization.startswith("Bearer "):
+                token = authorization.split(" ")[1]
+        
+        if not token:
+            if self.auto_error:
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+            return None
+        return token
+
+oauth2_scheme = OAuth2PasswordBearerWithCookie(tokenUrl="auth/login")
 
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
@@ -60,7 +93,6 @@ def get_token_payload(token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -72,7 +104,6 @@ def get_current_user(payload: dict = Depends(get_token_payload), db: Session = D
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
     )
     user_type = payload.get("user_type")
     if user_type != "internal":
@@ -83,15 +114,18 @@ def get_current_user(payload: dict = Depends(get_token_payload), db: Session = D
         raise credentials_exception
         
     user = db.query(models.User).filter(models.User.username == username).first()
-    if user is None or not user.is_active:
+    if user is None:
         raise credentials_exception
     return user
 
+def get_current_active_user(current_user: models.User = Depends(get_current_user)):
+    if not current_user.is_active:
+        raise HTTPException(status_code=400, detail="Inactive user")
+    return current_user
 def get_current_customer(payload: dict = Depends(get_token_payload), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
     )
     user_type = payload.get("user_type")
     if user_type != "customer":

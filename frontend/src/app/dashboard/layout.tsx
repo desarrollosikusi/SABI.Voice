@@ -35,19 +35,6 @@ const adminNavItems: NavItem[] = [
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-
-  useEffect(() => {
-    // Inyectar clase al body para reset/tema (en globals.css ya aplica)
-    const token = localStorage.getItem('token');
-    if (!token) {
-      router.push('/login');
-    } else {
-      setIsAuthenticated(true);
-    }
-  }, [router]);
-
-  if (!isAuthenticated) return null;
 
   return (
     <div className="layout-container" style={{ display: 'flex', width: '100vw', minHeight: '100vh', overflow: 'hidden' }}>

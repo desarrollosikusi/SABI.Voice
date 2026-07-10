@@ -22,7 +22,8 @@ export default function KnowledgeBasePage() {
       if (searchQuery) url += `?query=${encodeURIComponent(searchQuery)}`;
       
       const resp = await fetch(url, {
-        headers: { ...(localStorage.getItem("token") ? { Authorization: `Bearer ${localStorage.getItem("token")}` } : {}) }
+        headers: { "Content-Type": "application/json" },
+        credentials: "include"
       });
       if (resp.ok) {
         setArticles(await resp.json());

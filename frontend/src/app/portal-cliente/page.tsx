@@ -77,9 +77,7 @@ export default function CustomerDashboard() {
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <h1 style={{ margin: 0, color: 'var(--primary)', fontSize: '1.8rem' }}>Inicio</h1>
         <button onClick={() => { 
-          localStorage.clear(); 
-          sessionStorage.clear();
-          window.location.href = '/portal-cliente/login'; 
+          api.logout();
         }} className="btn-secondary" style={{ padding: '8px 16px' }}>Cerrar Sesión</button>
       </header>
 

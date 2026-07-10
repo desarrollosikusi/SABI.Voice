@@ -1,16 +1,15 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "/api";
 
 const getHeaders = () => {
-  const token = localStorage.getItem("token");
   return {
     "Content-Type": "application/json",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 };
 
-export const logout = () => {
-  localStorage.clear();
-  sessionStorage.clear();
+export const logout = async () => {
+  try {
+    await fetch(`${API_URL}/auth/logout`, { method: "POST", credentials: "include" });
+  } catch(e) {}
   if (typeof window !== 'undefined') {
     if (window.location.pathname.startsWith('/portal-cliente')) {
         window.location.href = '/portal-cliente/login';
@@ -20,15 +19,50 @@ export const logout = () => {
   }
 };
 
-const customFetch = async (url: string, options: RequestInit = {}) => {
-  const resp = await fetch(url, { ...options, cache: 'no-store' });
-  if (resp.status === 401 || resp.status === 403) {
+const handleErrorResponse = async (resp: Response) => {
+  if (resp.status === 401) {
     logout();
-    throw new Error("Sesión expirada o acceso denegado. Por favor, inicie sesión nuevamente.");
+    return new Error("Sesión expirada. Por favor, inicie sesión nuevamente.");
   }
+  if (resp.status === 403) {
+    return new Error("Acceso denegado. No tienes permisos para realizar esta acción.");
+  }
+  
+  if (resp.status === 404) {
+    return new Error("El recurso solicitado no fue encontrado.");
+  }
+  
+  if (resp.status >= 500) {
+    return new Error("Ocurrió un error en el servidor. Por favor, intente más tarde.");
+  }
+
+  const err = await resp.json().catch(() => ({}));
+  
+  if (err.detail && Array.isArray(err.detail)) {
+    // Pydantic 422 error
+    const pydanticErrors = err.detail.map((e: any) => {
+      const field = e.loc[e.loc.length - 1];
+      return `El campo '${field}' es inválido o requerido.`;
+    }).join('\n');
+    return new Error(pydanticErrors);
+  }
+  
+  return new Error(typeof err.detail === 'string' ? err.detail : (err.message || "Error en la petición"));
+};
+
+const customFetch = async (url: string, options: RequestInit = {}) => {
+  const headers = new Headers(options.headers || {});
+
+  const finalOptions = {
+    ...options,
+    headers,
+    credentials: "include" as RequestCredentials,
+    cache: 'no-store' as RequestCache
+  };
+  const resp = await fetch(url, finalOptions);
+  
   if (!resp.ok) {
-    const err = await resp.json().catch(() => ({}));
-    throw new Error(err.detail || "Error en la petición");
+    throw await handleErrorResponse(resp);
   }
   return resp.json();
 };
@@ -43,10 +77,10 @@ export const api = {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: formData,
+      credentials: "include"
     });
     if (!resp.ok) {
-        const err = await resp.json().catch(() => ({}));
-        throw new Error(err.detail || "Login failed");
+      throw await handleErrorResponse(resp);
     }
     return resp.json();
   },
@@ -89,9 +123,18 @@ export const api = {
     });
   },
 
-  getPqrsfs: async (area?: string) => {
-    const url = area ? `${API_URL}/pqrsf?area=${encodeURIComponent(area)}` : `${API_URL}/pqrsf`;
-    return await customFetch(url, {
+  getPqrsfs: async (filters: any = {}) => {
+    const params = new URLSearchParams();
+    if (filters.area) params.append('area', filters.area);
+    if (filters.customer_id) params.append('customer_id', filters.customer_id);
+    if (filters.status_id) params.append('status_id', filters.status_id);
+    if (filters.priority_id) params.append('priority_id', filters.priority_id);
+    if (filters.assigned_to) params.append('assigned_to', filters.assigned_to);
+    if (filters.from_date) params.append('from_date', filters.from_date);
+    if (filters.to_date) params.append('to_date', filters.to_date);
+
+    const queryString = params.toString() ? `?${params.toString()}` : '';
+    return await customFetch(`${API_URL}/pqrsf${queryString}`, {
       headers: getHeaders(),
     });
   },
@@ -128,6 +171,7 @@ export const api = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
+      credentials: "include"
     });
     if (!resp.ok) throw new Error("Failed to create case");
     return resp.json();
@@ -138,6 +182,7 @@ export const api = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ asunto, descripcion }),
+      credentials: "include"
     });
     if (!resp.ok) throw new Error("Failed to classify case");
     return resp.json();
@@ -146,6 +191,7 @@ export const api = {
   searchCustomers: async (search: string) => {
     const resp = await fetch(`${API_URL}/catalogs/customers?search=${encodeURIComponent(search)}`, {
       headers: { "Content-Type": "application/json" }, // public for now
+      credentials: "include"
     });
     if (!resp.ok) throw new Error("Failed to search customers");
     return resp.json();
@@ -218,16 +264,19 @@ export const api = {
   uploadCustomerLogo: async (id: number, file: File) => {
     const formData = new FormData();
     formData.append('file', file);
-    const resp = await fetch(`${API_URL}/admin/customers/${id}/logo`, {
+    
+    // Bypass Next.js proxy on local dev to prevent multipart/form-data stream drops
+    const baseUrl = (typeof window !== 'undefined' && window.location.hostname === 'localhost' && API_URL.startsWith('/')) 
+      ? 'http://localhost:8000' 
+      : API_URL;
+      
+    const resp = await fetch(`${baseUrl}/admin/customers/${id}/logo`, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      },
       body: formData,
+      credentials: "include"
     });
     if (!resp.ok) {
-      const errorData = await resp.json().catch(() => ({}));
-      throw new Error(errorData.detail || 'Failed to upload logo');
+      throw await handleErrorResponse(resp);
     }
     return resp.json();
   },
@@ -269,13 +318,14 @@ export const api = {
   getCustomerContacts: async (customerId: number) => {
     const resp = await fetch(`${API_URL}/customers/${customerId}/contacts`, {
       headers: { "Content-Type": "application/json" }, // public for now
+      credentials: "include"
     });
     if (!resp.ok) throw new Error("Failed to get contacts");
     return resp.json();
   },
 
   getCatalogs: async () => {
-    const resp = await fetch(`${API_URL}/catalogs`);
+    const resp = await fetch(`${API_URL}/catalogs`, { credentials: "include" });
     if (!resp.ok) throw new Error("Failed to fetch catalogs");
     return resp.json();
   },
@@ -284,7 +334,8 @@ export const api = {
     const resp = await fetch(`${API_URL}/pqrsf/${id}`, {
       method: 'PUT',
       headers: getHeaders(),
-      body: JSON.stringify(updateData)
+      body: JSON.stringify(updateData),
+      credentials: "include"
     });
     if (!resp.ok) throw new Error("Failed to update case");
     return resp.json();
@@ -324,6 +375,7 @@ export const api = {
       method: "POST",
       headers: getHeaders(),
       body: JSON.stringify({ comentario }),
+      credentials: "include"
     });
     if (!resp.ok) throw new Error("Failed to add comment");
     return resp.json();
@@ -334,6 +386,7 @@ export const api = {
       method: "PUT",
       headers: getHeaders(),
       body: JSON.stringify({ estado }),
+      credentials: "include"
     });
     if (!resp.ok) throw new Error("Failed to update finding status");
     return resp.json();
@@ -383,6 +436,125 @@ export const api = {
     return await customFetch(`${API_URL}/admin/contracts/${externalId}`, {
       headers: getHeaders(),
       cache: 'no-store' // Compliance with AG-001
+    });
+  },
+
+  // ==========================================
+  // COMMAND CENTER ENDPOINTS (Sprint 2 & 3 Evolution)
+  // ==========================================
+
+  getGlobalCommandCenterSummary: async () => {
+    return await customFetch(`${API_URL}/admin/command-center/global/summary`, {
+      headers: getHeaders(),
+      cache: 'no-store'
+    });
+  },
+
+  getGlobalCommandCenterMyWork: async () => {
+    return await customFetch(`${API_URL}/admin/command-center/global/my-work`, {
+      headers: getHeaders(),
+      cache: 'no-store'
+    });
+  },
+
+  getGlobalCommandCenterAlerts: async () => {
+    return await customFetch(`${API_URL}/admin/command-center/global/alerts`, {
+      headers: getHeaders(),
+      cache: 'no-store'
+    });
+  },
+
+  getGlobalCommandCenterActions: async () => {
+    return await customFetch(`${API_URL}/admin/command-center/global/actions`, {
+      headers: getHeaders(),
+      cache: 'no-store'
+    });
+  },
+
+  getGlobalTimeline: async (filters: { entity_type?: string, entity_id?: number, customer_id?: number } = {}) => {
+    const params = new URLSearchParams();
+    if (filters.entity_type) params.append('entity_type', filters.entity_type);
+    if (filters.entity_id) params.append('entity_id', filters.entity_id.toString());
+    if (filters.customer_id) params.append('customer_id', filters.customer_id.toString());
+    const qs = params.toString() ? `?${params.toString()}` : '';
+
+    return await customFetch(`${API_URL}/admin/events/timeline${qs}`, {
+      headers: getHeaders(),
+      cache: 'no-store'
+    });
+  },
+
+  getCommandCenterAlerts: async (customerId: string | number) => {
+    return await customFetch(`${API_URL}/admin/command-center/${customerId}/alerts`, {
+      headers: getHeaders(),
+      cache: 'no-store'
+    });
+  },
+
+  getCommandCenterActions: async (customerId: string | number) => {
+    return await customFetch(`${API_URL}/admin/command-center/${customerId}/actions`, {
+      headers: getHeaders(),
+      cache: 'no-store'
+    });
+  },
+
+
+
+  getCommandCenterAiSummary: async (customerId: string | number) => {
+    return await customFetch(`${API_URL}/admin/command-center/${customerId}/ai-summary`, {
+      headers: getHeaders(),
+      cache: 'no-store'
+    });
+  },
+
+  getCommandCenterTimeline: async (customerId: string | number) => {
+    return await customFetch(`${API_URL}/admin/command-center/${customerId}/timeline`, {
+      headers: getHeaders(),
+      cache: 'no-store'
+    });
+  },
+
+  getAllowedTransitions: async (pqrsfId: number | string) => {
+    return await customFetch(`${API_URL}/pqrsf/${pqrsfId}/allowed-transitions`, {
+      headers: getHeaders()
+    });
+  },
+
+  executeTransition: async (pqrsfId: number | string, data: any) => {
+    return await customFetch(`${API_URL}/pqrsf/${pqrsfId}/transition`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data)
+    });
+  },
+
+  // ==========================================
+  // EVENTS / NOTIFICATIONS (Sprint 3)
+  // ==========================================
+
+  getMyEvents: async (status?: string, severity?: string) => {
+    const params = new URLSearchParams();
+    if (status) params.append('status', status);
+    if (severity) params.append('severity', severity);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+
+    return await customFetch(`${API_URL}/admin/events${qs}`, {
+      headers: getHeaders(),
+      cache: 'no-store'
+    });
+  },
+
+  markEventRead: async (receiptId: string | number) => {
+    return await customFetch(`${API_URL}/admin/events/${receiptId}/read`, {
+      method: 'PUT',
+      headers: getHeaders()
+    });
+  },
+
+  archiveEvent: async (receiptId: string | number) => {
+    return await customFetch(`${API_URL}/admin/events/${receiptId}/archive`, {
+      method: 'PUT',
+      headers: getHeaders()
     });
   }
 };

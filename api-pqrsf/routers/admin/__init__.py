@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from . import customers, contacts, users, areas, architectures, types, priorities, states, workflow, sla, rules, integrations, dashboard, permissions, causes, categories, sentiments, parameters, management_systems, processes, contracts
+from . import customers, contacts, users, areas, architectures, types, priorities, states, workflow, sla, rules, integrations, dashboard, permissions, causes, categories, sentiments, parameters, management_systems, processes, contracts, command_center, events
 
 router = APIRouter()
 
@@ -24,3 +24,5 @@ router.include_router(parameters.router, prefix="/parameters", tags=["Admin - Pa
 router.include_router(management_systems.router, prefix="/management-systems", tags=["Admin - Management Systems"])
 router.include_router(processes.router, prefix="/processes", tags=["Admin - Processes"])
 router.include_router(contracts.router, tags=["Admin - Contracts"])
+router.include_router(command_center.router, prefix="/command-center", tags=["Admin - Command Center"])
+router.include_router(events.router, prefix="/events", tags=["Admin - Events"])

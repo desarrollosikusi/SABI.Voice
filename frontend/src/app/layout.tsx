@@ -7,6 +7,7 @@ export const metadata: Metadata = {
 };
 
 import SessionManager from '@/components/SessionManager';
+import { ToastProvider } from '@/contexts/ToastContext';
 
 export default function RootLayout({
   children,
@@ -16,8 +17,10 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body>
-        <SessionManager />
-        {children}
+        <ToastProvider>
+          <SessionManager />
+          {children}
+        </ToastProvider>
       </body>
     </html>
   );

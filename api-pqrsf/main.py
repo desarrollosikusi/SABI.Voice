@@ -1,11 +1,11 @@
 import os
-from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Form, Query, Request
+from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Form, Query, Request, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import func, String, cast
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import datetime
 import requests
 import uuid
@@ -16,6 +16,8 @@ import crud
 import auth
 from database import engine, get_db, Base
 from business_rules.engine import engine as rules_engine
+from providers import dependencies
+from notifications.provider import get_notification_provider, get_event_publisher, OperationalEventPayload
 
 
 def log_audit(db: Session, action: str, entity_type: str, entity_id: int, user_id: int, customer_id: int = None, details: dict = None):
@@ -30,7 +32,18 @@ def log_audit(db: Session, action: str, entity_type: str, entity_id: int, user_i
     db.add(audit)
     db.commit()
 
-app = FastAPI(title="SABI Voice API", version="1.0.0")
+from contextlib import asynccontextmanager
+import worker
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    worker.start_worker()
+    yield
+    # Shutdown
+    worker.stop_worker()
+
+app = FastAPI(title="SABI Voice API", version="1.0.0", lifespan=lifespan)
 
 # Create static directory if it doesn't exist
 os.makedirs("static/logos", exist_ok=True)
@@ -58,7 +71,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -166,27 +179,28 @@ def get_customer_relationship_dashboard(db: Session = Depends(get_db)):
 @app.post("/auth/login", response_model=schemas.Token)
 def login_for_access_token(
     request: Request,
+    response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(), 
     db: Session = Depends(get_db),
-    _: bool = Depends(auth.check_rate_limit)
+    _: bool = Depends(auth.check_rate_limit),
+    auth_provider = Depends(dependencies.get_auth_provider)
 ):
     provider = get_notification_provider()
-    # Try user first
-    user = db.query(models.User).filter(models.User.username == form_data.username).first()
-    if user and auth.verify_password(form_data.password, user.password_hash):
-        if not user.is_active:
-            provider.send("Seguridad", "LoginFailed", f"Usuario inactivo intentó acceder: {form_data.username}")
-            raise HTTPException(status_code=400, detail="Inactive user")
-        
-        token_data = {
-            "sub": user.username,
-            "user_type": "internal",
-            "user_id": user.id,
-            "roles": [user.role],
-            "area": user.area.name if user.area else None
-        }
+    
+    # Delegate to Auth Provider (Local or Azure AD depending on config)
+    token_data = auth_provider.authenticate(db, form_data)
+    
+    if token_data:
         access_token = auth.create_access_token(data=token_data)
-        provider.send("Seguridad", "InternalLogin", f"Usuario interno {user.username} inició sesión")
+        secure_cookie = os.getenv("ENVIRONMENT") == "production"
+        response.set_cookie(
+            key="access_token",
+            value=access_token,
+            httponly=True,
+            secure=secure_cookie,
+            samesite="lax",
+            path="/"
+        )
         return {"access_token": access_token, "token_type": "bearer"}
         
     # Try contact (customer)
@@ -204,6 +218,15 @@ def login_for_access_token(
             "roles": ["customer"]
         }
         access_token = auth.create_access_token(data=token_data)
+        secure_cookie = os.getenv("ENVIRONMENT") == "production"
+        response.set_cookie(
+            key="access_token",
+            value=access_token,
+            httponly=True,
+            secure=secure_cookie,
+            samesite="lax",
+            path="/"
+        )
         provider.send("Seguridad", "CustomerLogin", f"Contacto {contact.email} inició sesión en el Portal del Cliente")
         return {"access_token": access_token, "token_type": "bearer"}
 
@@ -213,6 +236,20 @@ def login_for_access_token(
         detail="Incorrect username/email or password",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+@app.post("/auth/logout")
+def logout(response: Response):
+    secure_cookie = os.getenv("ENVIRONMENT") == "production"
+    response.set_cookie(
+        key="access_token",
+        value="",
+        httponly=True,
+        secure=secure_cookie,
+        samesite="lax",
+        path="/",
+        max_age=0
+    )
+    return {"message": "Logged out successfully"}
 
 @app.get("/users/me", response_model=schemas.UserResponse)
 def read_users_me(current_user: models.User = Depends(auth.get_current_user)):
@@ -234,7 +271,12 @@ def update_portal_me(update_data: schemas.ContactUpdate, db: Session = Depends(g
 # ================================
 # CATÁLOGOS (PÚBLICOS Y PRIVADOS)
 # ================================
-from routers.admin import router as admin_router
+from routers.admin import (
+    users, areas, workflow, rules, sla, integrations, customers, contacts, types, categories, 
+    causes, states, priorities, parameters, permissions, architectures,
+    dashboard, processes, management_systems, sentiments, contracts,
+    command_center, events, router as admin_router
+)
 app.include_router(admin_router, prefix="/admin")
 
 @app.get("/catalogs/economic-sectors", response_model=List[schemas.EconomicSectorResponse])
@@ -301,10 +343,7 @@ def upload_customer_logo(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user)
 ):
-    allowed_roles = ["admin", "Operaciones", "Coordinador"]
-    if current_user.role not in allowed_roles:
-        raise HTTPException(status_code=403, detail="No tienes permisos para editar clientes.")
-        
+    # Permissions match the regular customer update endpoint (any authenticated internal user)
     if file.content_type not in ["image/jpeg", "image/png", "image/svg+xml"]:
         raise HTTPException(status_code=400, detail="Formato no permitido")
         
@@ -594,14 +633,51 @@ def create_pqrsf(pqrsf: schemas.PqrsfCreate, db: Session = Depends(get_db)):
     if not pqrsf.area_responsable_id and pqrsf.clasificacion_final and "area_responsable_id" in pqrsf.clasificacion_final:
         pqrsf.area_responsable_id = pqrsf.clasificacion_final["area_responsable_id"]
         
-    return crud.create_pqrsf(db=db, pqrsf=pqrsf)
+    created = crud.create_pqrsf(db=db, pqrsf=pqrsf)
+
+    # Publicar evento
+    publisher = get_event_publisher(db)
+    publisher.publish(OperationalEventPayload(
+        event_type="PQRSF_CREATED",
+        origin="PQRSF",
+        severity="Crítico" if created.prioridad_rel and created.prioridad_rel.name in ["Alta", "Urgente"] else "Información",
+        title=f"Nuevo Caso Creado: {created.consecutivo}",
+        description=created.asunto,
+        channel="all",
+        entity_type="pqrsf",
+        entity_id=created.id,
+        customer_id=created.cliente_id,
+        recommended_action="Revisar y asignar responsable si no lo tiene."
+    ))
+
+    return created
 
 @app.get("/pqrsf", response_model=List[schemas.PqrsfResponse])
-def get_pqrsfs(skip: int = 0, limit: int = 100, area_id: Optional[int] = None, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
-    # Omitimos area public parameter y enrutamos por el area del current user si se envía 'my_area' flag o similar
-    # Pero para simplificar, usaremos el query param `area_id`. 
-    # El Frontend enviará `area_id=user.area_id` para ver su bandeja, o nada para todos (si es admin).
-    return crud.get_pqrsf(db, skip=skip, limit=limit, area_id=area_id)
+def get_pqrsfs(
+    skip: int = 0, 
+    limit: int = 100, 
+    area_id: Optional[int] = None, 
+    customer_id: Optional[int] = Query(None, description="Filtrar por ID de cliente"),
+    status_id: Optional[int] = Query(None, description="Filtrar por estado del caso"),
+    priority_id: Optional[int] = Query(None, description="Filtrar por prioridad"),
+    assigned_to: Optional[int] = Query(None, description="Filtrar por responsable"),
+    from_date: Optional[str] = Query(None, description="Fecha de creación inicial (ISO)"),
+    to_date: Optional[str] = Query(None, description="Fecha de creación final (ISO)"),
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    return crud.get_pqrsf(
+        db, 
+        skip=skip, 
+        limit=limit, 
+        area_id=area_id,
+        customer_id=customer_id,
+        status_id=status_id,
+        priority_id=priority_id,
+        assigned_to=assigned_to,
+        from_date=from_date,
+        to_date=to_date
+    )
 
 @app.get("/pqrsf/{pqrsf_id}", response_model=schemas.PqrsfResponse)
 def get_pqrsf(pqrsf_id: int, db: Session = Depends(get_db)):
@@ -616,6 +692,65 @@ def update_pqrsf(pqrsf_id: int, pqrsf: schemas.PqrsfUpdate, db: Session = Depend
         updated = crud.update_pqrsf(db, pqrsf_id, pqrsf, current_user.id)
         if not updated:
             raise HTTPException(status_code=404, detail="PQRSF not found")
+        
+        # Publicar evento
+        publisher = get_event_publisher(db)
+        publisher.publish(OperationalEventPayload(
+            event_type="PQRSF_UPDATED",
+            origin="PQRSF",
+            severity="Información",
+            title=f"Caso Actualizado: {updated.consecutivo}",
+            description=f"El caso ha sido actualizado por {current_user.full_name}",
+            channel="all",
+            entity_type="pqrsf",
+            entity_id=updated.id,
+            customer_id=updated.cliente_id,
+            recommended_action="Revisar los últimos cambios del caso."
+        ))
+
+        return updated
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+from core.workflow_engine import WorkflowService
+
+@app.get("/pqrsf/{pqrsf_id}/allowed-transitions", response_model=List[schemas.WorkflowTransitionResponse])
+def get_allowed_transitions(pqrsf_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    pqrsf = db.query(models.Pqrsf).filter(models.Pqrsf.id == pqrsf_id).first()
+    if not pqrsf:
+        raise HTTPException(status_code=404, detail="PQRSF not found")
+        
+    engine = WorkflowService(db)
+    user_role_name = current_user.role.name if current_user.role else "Unknown"
+    transitions = engine.get_allowed_transitions(pqrsf.estado_id, user_role_name)
+    
+    # Map to response schema
+    result = []
+    for t in transitions:
+        result.append({
+            "id": t.id,
+            "from_state_id": t.from_state_id,
+            "to_state_id": t.to_state_id,
+            "to_state_name": t.to_state.name if t.to_state else "",
+            "allowed_roles": t.allowed_roles or "*",
+            "require_note": t.require_note,
+            "require_assignment": t.require_assignment,
+            "require_evidence": t.require_evidence
+        })
+    return result
+
+@app.post("/pqrsf/{pqrsf_id}/transition", response_model=schemas.PqrsfResponse)
+def execute_transition(pqrsf_id: int, payload: schemas.PqrsfTransitionRequest, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    try:
+        engine = WorkflowService(db)
+        updated = engine.execute_pqrsf_transition(
+            pqrsf_id=pqrsf_id,
+            to_state_id=payload.to_state_id,
+            user=current_user,
+            note=payload.note,
+            assigned_to=payload.assigned_to,
+            evidence_url=payload.evidence_url
+        )
         return updated
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
