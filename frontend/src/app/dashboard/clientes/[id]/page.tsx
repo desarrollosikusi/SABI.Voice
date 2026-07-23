@@ -86,7 +86,7 @@ export default function ClienteDetail() {
         </div>
         
         {cliente.logo_path ? (
-          <img src={`http://localhost:8000${cliente.logo_path}`} alt={cliente.name} style={{ width: 140, height: 60, borderRadius: 'var(--radius-sm)', objectFit: 'contain' }} />
+          <img src={`http://localhost:8000/${cliente.logo_path}`} alt={cliente.name} style={{ width: 140, height: 60, borderRadius: 'var(--radius-sm)', objectFit: 'contain' }} />
         ) : (
           <div style={{ width: 60, height: 60, borderRadius: 'var(--radius-sm)', backgroundColor: 'var(--surface-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 'bold', color: 'var(--text-secondary)' }}>
             {cliente.name.substring(0, 2).toUpperCase()}

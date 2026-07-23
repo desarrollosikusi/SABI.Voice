@@ -15,9 +15,31 @@ class Architecture(Base):
     name = Column(String(100), unique=True, nullable=False)
     is_active = Column(Boolean, default=True)
 
+class CaseCategory(Base):
+    __tablename__ = "case_categories"
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(50), unique=True, index=True, nullable=False)
+    sequence_prefix = Column(String(10), nullable=True) # Prefijo del consecutivo, ej: PQRSF, SOL, AUD
+    name = Column(String(100), nullable=False)
+    description = Column(Text, nullable=True)
+    color = Column(String(20), default="#000000")
+    icon = Column(String(50), default="Folder")
+    workflow_id = Column(Integer, nullable=True) # Future use
+    form_schema = Column(JSON, nullable=True) # Future use
+    is_active = Column(Boolean, default=True)
+    display_order = Column(Integer, default=0)
+
+class CaseSource(Base):
+    __tablename__ = "case_sources"
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(50), unique=True, index=True, nullable=False)
+    name = Column(String(100), nullable=False)
+    is_active = Column(Boolean, default=True)
+
 class PqrsfType(Base):
     __tablename__ = "pqrsf_types"
     id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(50), unique=True, index=True, nullable=True) # Temporarily nullable for migration
     name = Column(String(50), unique=True, nullable=False)
     plantilla_respuesta = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True)
@@ -188,6 +210,9 @@ class User(Base):
     role = Column(String(50), default="Administrador")
     job_title = Column(String(100), nullable=True)
     area_id = Column(Integer, ForeignKey("areas.id", ondelete="SET NULL"), nullable=True)
+    phone = Column(String(50), nullable=True)
+    avatar_url = Column(String(255), nullable=True)
+    token_version = Column(Integer, default=1, nullable=False)
     is_active = Column(Boolean, default=True)
     last_login = Column(DateTime, nullable=True)
     
@@ -304,6 +329,8 @@ class Pqrsf(Base):
     consecutivo = Column(String(50), unique=True, index=True, nullable=False)
     fecha_creacion = Column(DateTime, default=datetime.datetime.utcnow)
     
+    category_id = Column(Integer, ForeignKey("case_categories.id"), nullable=True)
+    source_id = Column(Integer, ForeignKey("case_sources.id"), nullable=True)
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True)
     contact_id = Column(Integer, ForeignKey("contacts.id"), nullable=True)
     cliente_empresa = Column(String(150))
@@ -311,6 +338,7 @@ class Pqrsf(Base):
     
     asunto = Column(String(255))
     descripcion = Column(Text)
+    fecha_limite_sugerida = Column(DateTime, nullable=True)
     
     tipo_id = Column(Integer, ForeignKey("pqrsf_types.id"))
     area_id = Column(Integer, ForeignKey("areas.id"))

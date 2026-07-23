@@ -50,6 +50,10 @@ def check_rate_limit(request: Request):
         
     return True
 
+def clear_login_attempts(ip: str):
+    if ip in _login_attempts:
+        del _login_attempts[ip]
+
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 class OAuth2PasswordBearerWithCookie(OAuth2):
@@ -116,6 +120,11 @@ def get_current_user(payload: dict = Depends(get_token_payload), db: Session = D
     user = db.query(models.User).filter(models.User.username == username).first()
     if user is None:
         raise credentials_exception
+        
+    token_version = payload.get("token_version")
+    if token_version != user.token_version:
+        raise credentials_exception
+        
     return user
 
 def get_current_active_user(current_user: models.User = Depends(get_current_user)):

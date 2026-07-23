@@ -9,6 +9,14 @@ import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import Select from '@/components/ui/Select';
 import Tabs from '@/components/ui/Tabs';
+import Modal from '@/components/ui/Modal';
+import TicketWizard from '@/components/TicketWizard/TicketWizard';
+import * as LucideIcons from 'lucide-react';
+
+const renderIcon = (iconName: string, size: number = 16, color: string = 'currentColor') => {
+  const Icon = (LucideIcons as any)[iconName] || LucideIcons.FileText;
+  return <Icon size={size} color={color} />;
+};
 
 export default function PqrsfListPage() {
   const router = useRouter();
@@ -17,6 +25,7 @@ export default function PqrsfListPage() {
   const [filterMode, setFilterMode] = useState<'my_area' | 'mine' | 'all'>('my_area');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [states, setStates] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -39,6 +48,9 @@ export default function PqrsfListPage() {
     fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/admin/states`, {
       credentials: "include"
     }).then(res => res.json()).then(data => setStates(data || [])).catch(console.error);
+
+    // Fetch categories
+    api.getCaseCategories().then(data => setCategories(data || [])).catch(console.error);
   }, []);
 
   const fetchData = async (areaFilter?: string, myId?: number) => {
@@ -75,34 +87,55 @@ export default function PqrsfListPage() {
 
   const columns = [
     { key: 'id', label: 'ID' },
-    { key: 'subject', label: 'Asunto' },
-    { key: 'customer', label: 'Cliente', render: (c: any) => c.customer?.name || '-' },
-    { key: 'area', label: 'Área Asignada', render: (c: any) => c.area?.name || '-' },
     { 
-      key: 'status', 
-      label: 'Estado', 
-      render: (c: any) => (
-        <Badge variant={c.status === 'Open' ? 'warning' : c.status === 'Resolved' ? 'success' : 'neutral'}>
-          {c.status}
-        </Badge>
-      )
+      key: 'categoria', 
+      label: 'Categoría', 
+      render: (c: any) => {
+        const cat = categories.find(cat => cat.id === c.category_id) || {
+          name: 'PQRSF',
+          color: 'var(--success)',
+          icon: 'FileText'
+        };
+        return (
+          <Badge variant="neutral" style={{ backgroundColor: cat.color ? `${cat.color}20` : 'rgba(34,197,94,0.1)', color: cat.color || 'var(--success)', borderColor: cat.color || 'var(--success)', display: 'inline-flex', alignItems: 'center', gap: '6px', width: 'fit-content', whiteSpace: 'nowrap' }}>
+            {renderIcon(cat.icon, 14, cat.color || 'currentColor')} <span>{cat.name}</span>
+          </Badge>
+        );
+      }
     },
-    { key: 'created_at', label: 'Fecha Creado', render: (c: any) => new Date(c.created_at).toLocaleDateString() }
+    { key: 'asunto', label: 'Asunto' },
+    { key: 'cliente', label: 'Cliente', render: (c: any) => c.cliente_empresa || '-' },
+    { key: 'area', label: 'Área Asignada', render: (c: any) => c.area_rel?.name || '-' },
+    { 
+      key: 'estado', 
+      label: 'Estado', 
+      render: (c: any) => {
+        const estado = c.estado_rel?.name || '-';
+        return (
+          <Badge variant={estado === 'Registrado' || estado === 'En Asignación' ? 'warning' : estado === 'Cerrado' ? 'success' : 'neutral'}>
+            {estado}
+          </Badge>
+        );
+      }
+    },
+    { key: 'fecha_creacion', label: 'Fecha Creado', render: (c: any) => new Date(c.fecha_creacion).toLocaleDateString() }
   ];
 
   const tabOptions = [
-    { value: 'my_area', label: 'Casos de mi Área' },
-    { value: 'mine', label: 'Mis Casos Asignados' },
-    { value: 'all', label: 'Todos los Casos' }
+    { value: 'my_area', label: 'Tickets de mi Área' },
+    { value: 'mine', label: 'Mis Tickets Asignados' },
+    { value: 'all', label: 'Todos los Tickets' }
   ];
+
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
 
   return (
     <div>
       <PageHeader 
-        title="Bandejas de Trabajo (PQRSF)"
+        title="Bandejas de Tickets (PQRSF)"
         description="Gestiona y haz seguimiento a las Peticiones, Quejas, Reclamos y Solicitudes."
-        breadcrumbs={[{ label: 'Inicio', href: '/dashboard' }, { label: 'Gestión de Casos' }]}
-        actions={<Button variant="primary">Nuevo Caso</Button>}
+        breadcrumbs={[{ label: 'Inicio', href: '/dashboard' }, { label: 'Gestión de Tickets' }]}
+        actions={<Button variant="primary" onClick={() => setIsWizardOpen(true)}>Nuevo Ticket</Button>}
       />
 
       <Card style={{ marginBottom: '24px' }}>
@@ -129,7 +162,7 @@ export default function PqrsfListPage() {
       <Card noPadding>
         {loading ? (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-            Cargando casos...
+            Cargando tickets...
           </div>
         ) : (
           <DataTable 
@@ -139,6 +172,10 @@ export default function PqrsfListPage() {
           />
         )}
       </Card>
+
+      <Modal isOpen={isWizardOpen} onClose={() => setIsWizardOpen(false)} maxWidth="1100px">
+        <TicketWizard onClose={() => setIsWizardOpen(false)} onSuccess={() => { setIsWizardOpen(false); fetchData(filterMode === 'my_area' ? user?.area : undefined, filterMode === 'mine' ? user?.id : undefined); }} />
+      </Modal>
     </div>
   );
 }

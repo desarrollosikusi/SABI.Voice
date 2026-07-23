@@ -138,7 +138,7 @@ export default function StakeholdersTab({ customerId }: StakeholdersTabProps) {
     { key: 'role_name', label: 'Cargo / Rol', sortable: true, render: (row: any) => row.cargo || 'N/A' },
     { key: 'email', label: 'Email', sortable: true },
     { key: 'phone', label: 'Teléfono', render: (row: any) => row.phone || row.celular || 'N/A' },
-    { key: 'ultima_interaccion', label: 'Última Interacción', render: () => '-' },
+    { key: 'ultima_interaccion', label: 'Última Interacción', render: (row: any) => row.ultima_interaccion ? formatDate(row.ultima_interaccion) : '-' },
     ...(stakeholderFilter === 'Inactivos' ? [
       { key: 'deactivation_date', label: 'Fecha Inactivación', sortable: true, render: (row: any) => row.deactivation_date ? formatDate(row.deactivation_date) : 'N/A' },
       { key: 'deactivation_reporter', label: 'Reportado por', sortable: true, render: (row: any) => row.deactivation_reporter || 'N/A' }

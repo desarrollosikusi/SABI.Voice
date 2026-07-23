@@ -201,6 +201,7 @@ def login_for_access_token(
             samesite="lax",
             path="/"
         )
+        auth.clear_login_attempts(request.client.host)
         return {"access_token": access_token, "token_type": "bearer"}
         
     # Try contact (customer)
@@ -228,6 +229,7 @@ def login_for_access_token(
             path="/"
         )
         provider.send("Seguridad", "CustomerLogin", f"Contacto {contact.email} inició sesión en el Portal del Cliente")
+        auth.clear_login_attempts(request.client.host)
         return {"access_token": access_token, "token_type": "bearer"}
 
     provider.send("Seguridad", "CustomerLoginFailed", f"Intento fallido de login para: {form_data.username}")
@@ -254,6 +256,48 @@ def logout(response: Response):
 @app.get("/users/me", response_model=schemas.UserResponse)
 def read_users_me(current_user: models.User = Depends(auth.get_current_user)):
     return current_user
+
+@app.post("/users/me/avatar")
+async def upload_user_avatar(
+    file: UploadFile = File(...), 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    from providers.storage_provider import get_storage_provider
+    provider = get_storage_provider()
+    
+    # In a real scenario, we might want to validate the content_type here
+    result = await provider.upload_avatar(file)
+    
+    # Update DB
+    current_user.avatar_url = result["url"]
+    db.commit()
+    
+    # Log Audit
+    log_audit(db, "Cambio de avatar", "User", current_user.id, current_user.id)
+    
+    return result
+
+@app.patch("/users/me/password")
+def update_user_password(
+    data: schemas.UserPasswordUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    if not auth.verify_password(data.current_password, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="Contraseña actual incorrecta")
+        
+    if data.current_password == data.new_password:
+        raise HTTPException(status_code=400, detail="La nueva contraseña no puede ser igual a la anterior")
+        
+    current_user.password_hash = auth.get_password_hash(data.new_password)
+    current_user.token_version += 1
+    db.commit()
+    
+    log_audit(db, "Cambio de contraseña", "User", current_user.id, current_user.id)
+    
+    return {"message": "Contraseña actualizada exitosamente. Debes iniciar sesión nuevamente."}
+
 
 @app.get("/portal/me", response_model=schemas.ContactResponse)
 def read_portal_me(current_customer: models.Contact = Depends(auth.get_current_customer)):
@@ -282,6 +326,15 @@ app.include_router(admin_router, prefix="/admin")
 @app.get("/catalogs/economic-sectors", response_model=List[schemas.EconomicSectorResponse])
 def get_economic_sectors(db: Session = Depends(get_db)):
     return db.query(models.EconomicSector).filter(models.EconomicSector.is_active == True).order_by(models.EconomicSector.order_index).all()
+
+@app.get("/catalogs/case-categories", response_model=List[schemas.CaseCategoryResponse])
+def get_case_categories(db: Session = Depends(get_db)):
+    return db.query(models.CaseCategory).filter(models.CaseCategory.is_active == True).order_by(models.CaseCategory.display_order).all()
+
+@app.get("/catalogs/case-sources", response_model=List[schemas.CaseSourceResponse])
+def get_case_sources(db: Session = Depends(get_db)):
+    return db.query(models.CaseSource).filter(models.CaseSource.is_active == True).all()
+
 
 @app.get("/catalogs/internal-users", response_model=List[schemas.UserResponse])
 def get_internal_users(db: Session = Depends(get_db)):
@@ -500,6 +553,8 @@ def update_contact(contact_id: int, contact: schemas.ContactUpdateAdmin, db: Ses
     db.commit()
     db.refresh(db_contact)
     
+    setattr(db_contact, "ultima_interaccion", None)
+    
     provider = get_notification_provider()
     provider.send("Sistema", "ContactUpdated", f"Contacto actualizado: {db_contact.name} ({db_contact.email})")
     
@@ -628,6 +683,12 @@ def classify_pqrsf(req: ClassifyRequestProxy, db: Session = Depends(get_db)):
 
 @app.post("/pqrsf", response_model=schemas.PqrsfResponse)
 def create_pqrsf(pqrsf: schemas.PqrsfCreate, db: Session = Depends(get_db)):
+    if not pqrsf.customer_id:
+        raise HTTPException(status_code=400, detail="customer_id es requerido.")
+    customer = crud.get_customer_by_id(db, pqrsf.customer_id)
+    if not customer or not customer.is_active:
+        raise HTTPException(status_code=400, detail="Cliente inválido o inactivo.")
+
     # The client can pass clasificacion_final directly. 
     # The engine should suggest area_responsable.
     if not pqrsf.area_responsable_id and pqrsf.clasificacion_final and "area_responsable_id" in pqrsf.clasificacion_final:
@@ -640,13 +701,13 @@ def create_pqrsf(pqrsf: schemas.PqrsfCreate, db: Session = Depends(get_db)):
     publisher.publish(OperationalEventPayload(
         event_type="PQRSF_CREATED",
         origin="PQRSF",
-        severity="Crítico" if created.prioridad_rel and created.prioridad_rel.name in ["Alta", "Urgente"] else "Información",
-        title=f"Nuevo Caso Creado: {created.consecutivo}",
+        severity="Crítico" if getattr(created, "prioridad", None) and created.prioridad.name in ["Alta", "Urgente"] else "Información",
+        title=f"Nuevo Ticket Creado: {created.consecutivo}",
         description=created.asunto,
         channel="all",
         entity_type="pqrsf",
         entity_id=created.id,
-        customer_id=created.cliente_id,
+        customer_id=created.customer_id,
         recommended_action="Revisar y asignar responsable si no lo tiene."
     ))
 
@@ -851,7 +912,7 @@ def update_finding_status(pqrsf_id: int, finding_id: int, status_update: Finding
     return db_finding
 
 @app.post("/pqrsf/{pqrsf_id}/attachments")
-def upload_attachment(pqrsf_id: int, file: UploadFile = File(...), db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+def upload_attachment(pqrsf_id: int, file: UploadFile = File(...), observacion: Optional[str] = Form(None), db: Session = Depends(get_db), token: dict = Depends(auth.get_token_payload)):
     db_pqrsf = crud.get_pqrsf_by_id(db, pqrsf_id)
     if not db_pqrsf:
         raise HTTPException(status_code=404, detail="PQRSF not found")
@@ -897,7 +958,27 @@ def upload_attachment(pqrsf_id: int, file: UploadFile = File(...), db: Session =
     db.commit()
     
     # Auditoría
-    get_notification_provider().send("Auditoría", "FileUploaded", f"Archivo subido: {safe_filename} al caso {pqrsf_id} por {current_user.username}")
+    username = token.get("sub", "Usuario") if token else "Anónimo"
+    
+    if observacion:
+        db.refresh(db_attachment) # ensure db_attachment.id is available
+        user_type = token.get("user_type") if token else None
+        user_id = token.get("id") if token else None
+        db_comm = models.CaseCommunication(
+            pqrsf_id=pqrsf_id,
+            mensaje=f"Archivo adjunto: [{safe_filename}](ATTACHMENT:{pqrsf_id}:{db_attachment.id})\nObservación: {observacion}",
+            direccion="Entrante" if user_type == "customer" else "Saliente",
+            tipo="Cliente" if user_type == "customer" else "Interno",
+            autor_usuario_id=user_id if user_type == "internal" else None,
+            autor_contacto_id=user_id if user_type == "customer" else None,
+            visible_cliente=True,
+            message_type="Adjunto",
+            canal="Portal"
+        )
+        db.add(db_comm)
+        db.commit()
+    
+    get_notification_provider().send("Auditoría", "FileUploaded", f"Archivo subido: {safe_filename} al caso {pqrsf_id} por {username}")
     return {"message": "Attachment uploaded successfully"}
 
 
@@ -1187,15 +1268,14 @@ def create_portal_pqrsf_communication(
     db: Session = Depends(get_db), 
     current_customer=Depends(auth.get_current_customer)
 ):
-    new_comm = crud.create_customer_communication(db, pqrsf_id, current_customer.customer_id, comm.mensaje)
+    new_comm = crud.create_customer_communication(db, pqrsf_id, current_customer.customer_id, current_customer.id, comm.mensaje)
     if not new_comm:
         raise HTTPException(status_code=403, detail="No tienes acceso a este caso o no existe")
-        
     return {
         "id": new_comm.id,
         "fecha": new_comm.fecha,
         "remitente": "Cliente",
-        "mensaje": new_comm.subject,
+        "mensaje": new_comm.mensaje,
         "adjuntos": []
     }
 

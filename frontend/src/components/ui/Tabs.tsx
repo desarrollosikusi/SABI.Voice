@@ -1,60 +1,92 @@
 import React from 'react';
+import * as Icons from 'lucide-react';
 
-export interface TabOption {
-  value: string;
+export type TabItem = {
+  id: string;
   label: string;
-}
+  count?: number;
+  icon?: string;
+  color?: string; // Optional color for the text/icon when active
+};
 
-export interface TabsProps {
-  options: TabOption[];
-  value: string;
-  onChange: (value: string) => void;
-  className?: string;
-  style?: React.CSSProperties;
-}
+export type TabsProps = {
+  tabs: TabItem[];
+  activeTab: string;
+  onChange: (tabId: string) => void;
+};
 
-export default function Tabs({ options, value, onChange, className = '', style = {} }: TabsProps) {
+export default function Tabs({ tabs, activeTab, onChange }: TabsProps) {
   return (
-    <div className={className} style={{ width: '100%', ...style }}>
-      <div
-        role="tablist"
-        style={{
-          display: 'flex',
-          gap: '24px',
-          borderBottom: '1px solid var(--surface-border)',
-        }}
-      >
-        {options.map((tab) => {
-          const isActive = value === tab.value;
-          return (
-            <button
-              key={tab.value}
-              role="tab"
-              aria-selected={isActive}
-              onClick={() => onChange(tab.value)}
-              style={{
-                background: 'none',
-                border: 'none',
-                padding: '12px 0',
-                cursor: 'pointer',
-                fontSize: '0.95rem',
-                fontWeight: isActive ? 600 : 500,
-                color: isActive ? 'var(--primary)' : 'var(--text-secondary)',
-                borderBottom: isActive ? '2px solid var(--primary)' : '2px solid transparent',
-                transition: 'all 0.2s ease',
-              }}
-              onMouseEnter={(e) => {
-                if (!isActive) e.currentTarget.style.color = 'var(--text-primary)';
-              }}
-              onMouseLeave={(e) => {
-                if (!isActive) e.currentTarget.style.color = 'var(--text-secondary)';
-              }}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+    <div style={{ 
+      display: 'flex', 
+      gap: '8px', 
+      padding: '0 24px 16px 24px', 
+      overflowX: 'auto',
+      borderBottom: '1px solid var(--surface-border)',
+      backgroundColor: 'var(--surface-color)',
+      paddingTop: '16px'
+    }}>
+      {tabs.map(tab => {
+        const isActive = activeTab === tab.id;
+        
+        let IconComponent = null;
+        if (tab.icon && (Icons as any)[tab.icon]) {
+          IconComponent = (Icons as any)[tab.icon];
+        }
+
+        const activeColor = tab.color || 'var(--color-primary)';
+        const bgColor = isActive ? `${activeColor}15` : 'transparent';
+        const textColor = isActive ? activeColor : 'var(--text-secondary)';
+
+        return (
+          <button
+            key={tab.id}
+            onClick={() => onChange(tab.id)}
+            style={{
+              padding: '8px 16px',
+              border: 'none',
+              background: bgColor,
+              color: textColor,
+              fontWeight: isActive ? 600 : 500,
+              borderRadius: 'var(--radius-xl)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              whiteSpace: 'nowrap',
+              transition: 'all 0.2s ease',
+            }}
+            onMouseEnter={(e) => {
+              if (!isActive) {
+                e.currentTarget.style.background = 'var(--surface-hover)';
+                e.currentTarget.style.color = 'var(--text-primary)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isActive) {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = 'var(--text-secondary)';
+              }
+            }}
+          >
+            {IconComponent && <IconComponent size={16} />}
+            {tab.label}
+            {tab.count !== undefined && (
+              <span style={{ 
+                backgroundColor: isActive ? `${activeColor}30` : 'var(--surface-border)',
+                color: isActive ? activeColor : 'var(--text-secondary)',
+                padding: '2px 8px',
+                borderRadius: '10px',
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                marginLeft: '4px'
+              }}>
+                {tab.count}
+              </span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }

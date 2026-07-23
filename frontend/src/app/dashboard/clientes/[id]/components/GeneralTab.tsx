@@ -266,7 +266,7 @@ export default function GeneralTab({ cliente, sectors, users, onUpdate }: Genera
                   {logoPreview ? (
                     <img src={logoPreview} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="Logo Preview" />
                   ) : cliente.logo_path ? (
-                    <img src={`http://localhost:8000${cliente.logo_path}`} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="Logo" />
+                    <img src={`http://localhost:8000/${cliente.logo_path}`} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="Logo" />
                   ) : <span style={{ color: 'var(--text-secondary)' }}>Sin logo</span>}
                 </div>
                 <div style={{ flex: 1 }}>

@@ -6,12 +6,12 @@ from database import get_db
 
 router = APIRouter()
 
-@router.get("/", response_model=List[schemas.CatalogResponse])
+@router.get("/", response_model=List[schemas.PqrsfTypeResponse])
 def get_all(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return db.query(models.PqrsfType).offset(skip).limit(limit).all()
 
-@router.post("/", response_model=schemas.CatalogResponse)
-def create(item: schemas.CatalogBase, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+@router.post("/", response_model=schemas.PqrsfTypeResponse)
+def create(item: schemas.PqrsfTypeBase, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
     db_item = models.PqrsfType(**item.model_dump())
     db.add(db_item)
     db.commit()

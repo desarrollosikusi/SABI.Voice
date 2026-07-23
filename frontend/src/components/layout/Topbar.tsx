@@ -2,6 +2,7 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import { logout } from '@/services/api';
 import NotificationBell from './NotificationBell';
+import UserMenu from './UserMenu';
 
 type TopbarProps = {
   userName?: string;
@@ -39,16 +40,8 @@ export default function Topbar({ userName = 'Administrador' }: TopbarProps) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px', borderLeft: '1px solid var(--surface-border)', paddingLeft: '24px' }}>
           
           <NotificationBell />
+          <UserMenu />
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: 'var(--primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '0.9rem' }}>
-              {userName.charAt(0).toUpperCase()}
-            </div>
-            <span style={{ fontSize: '0.9rem', fontWeight: 500, color: 'var(--text-primary)' }}>{userName}</span>
-          </div>
-          <button onClick={handleLogout} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}>
-            Salir
-          </button>
         </div>
       </div>
     </header>

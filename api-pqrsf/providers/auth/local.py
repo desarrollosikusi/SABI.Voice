@@ -25,7 +25,8 @@ class LocalAuthProvider(IAuthProvider):
                 "user_type": "internal",
                 "user_id": user.id,
                 "roles": [user.role],
-                "area": user.area.name if user.area else None
+                "area": user.area.name if user.area else None,
+                "token_version": user.token_version
             }
         
         # Will return None if auth fails, the router should throw 401

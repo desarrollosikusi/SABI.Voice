@@ -71,13 +71,27 @@ def search_customers(db: Session, search: str, limit: int = 10):
     ).limit(limit).all()
 
 def get_contacts_by_customer(db: Session, customer_id: int):
-    return db.query(models.Contact).filter(
+    contacts = db.query(models.Contact).filter(
         models.Contact.customer_id == customer_id
     ).all()
+    for c in contacts:
+        # Fetch the latest PQRSF created by this contact
+        latest_pqrsf = db.query(models.Pqrsf).filter(models.Pqrsf.contact_id == c.id).order_by(models.Pqrsf.fecha_creacion.desc()).first()
+        pqrsf_date = latest_pqrsf.fecha_creacion if latest_pqrsf else None
+        
+        # Fetch the latest communication by this contact
+        latest_comm = db.query(models.CaseCommunication).filter(models.CaseCommunication.autor_contacto_id == c.id).order_by(models.CaseCommunication.fecha.desc()).first()
+        comm_date = latest_comm.fecha if latest_comm else None
+        
+        dates = [d for d in (pqrsf_date, comm_date) if d is not None]
+        c.ultima_interaccion = max(dates) if dates else None
+    return contacts
 
-def generate_consecutivo(db: Session) -> str:
+def generate_consecutivo(db: Session, category_id: int) -> str:
+    category = db.query(models.CaseCategory).filter(models.CaseCategory.id == category_id).first()
+    prefix_code = category.sequence_prefix if category and category.sequence_prefix else "CASE"
     year = datetime.utcnow().year
-    prefix = f"PQRSF-{year}-"
+    prefix = f"{prefix_code}-{year}-"
     last_pqrsf = db.query(models.Pqrsf).filter(models.Pqrsf.consecutivo.like(f"{prefix}%")).order_by(models.Pqrsf.id.desc()).first()
     if not last_pqrsf:
         return f"{prefix}0001"
@@ -95,7 +109,7 @@ def calculate_sla(db: Session, tipo_id: int, prioridad_id: int):
     return None, None
 
 def create_pqrsf(db: Session, pqrsf: schemas.PqrsfCreate):
-    consecutivo = generate_consecutivo(db)
+    consecutivo = generate_consecutivo(db, pqrsf.category_id)
     horas_objetivo, fecha_vencimiento = calculate_sla(db, pqrsf.tipo_id, pqrsf.prioridad_id)
     
     db_pqrsf = models.Pqrsf(
@@ -190,7 +204,7 @@ def get_pqrsf(
     if area_id:
         query = query.filter(models.Pqrsf.area_responsable_id == area_id)
     if customer_id:
-        query = query.filter(models.Pqrsf.cliente_id == customer_id)
+        query = query.filter(models.Pqrsf.customer_id == customer_id)
     if status_id:
         query = query.filter(models.Pqrsf.estado_id == status_id)
     if priority_id:
@@ -339,6 +353,9 @@ def search_knowledge(db: Session, query: str = None, area_id: int = None, arquit
     return q.order_by(models.KnowledgeArticle.created_at.desc()).limit(limit).all()
 
 
+def get_customer_by_id(db: Session, customer_id: int):
+    return db.query(models.Customer).filter(models.Customer.id == customer_id).first()
+
 def get_customer_dashboard_stats(db: Session, customer_id: int, contact_id: int):
     from sqlalchemy import func, case
     stats = db.query(
@@ -427,10 +444,10 @@ def get_customer_pqrsf_communications(db: Session, pqrsf_id: int, customer_id: i
     if not pqrsf:
         return []
         
-    # Only return Cliente and Operación messages. No Interno, No Sistema (unless user visible).
+    # Return Cliente and Operación messages, plus any Interno message marked as visible_cliente=True.
     comms = db.query(models.CaseCommunication).filter(
         models.CaseCommunication.pqrsf_id == pqrsf.id,
-        models.CaseCommunication.tipo.in_(['Cliente', 'Operación'])
+        models.CaseCommunication.visible_cliente == True
     ).order_by(models.CaseCommunication.fecha.asc()).all()
     
     result = []
@@ -440,12 +457,12 @@ def get_customer_pqrsf_communications(db: Session, pqrsf_id: int, customer_id: i
             "id": c.id,
             "fecha": c.fecha,
             "remitente": remitente,
-            "mensaje": c.subject, # In our simplified model, subject/mensaje might be the same. Wait, there is no 'mensaje' body in the schema? subject is String(255).
+            "mensaje": c.mensaje, # Use the actual mensaje field
             "adjuntos": [] # attachments are currently tied to the pqrsf, not individual communications
         })
     return result
 
-def create_customer_communication(db: Session, pqrsf_id: int, customer_id: int, mensaje: str):
+def create_customer_communication(db: Session, pqrsf_id: int, customer_id: int, contact_id: int, mensaje: str):
     pqrsf = db.query(models.Pqrsf).filter(
         models.Pqrsf.id == pqrsf_id,
         models.Pqrsf.customer_id == customer_id
@@ -455,12 +472,14 @@ def create_customer_communication(db: Session, pqrsf_id: int, customer_id: int, 
         
     new_comm = models.CaseCommunication(
         pqrsf_id=pqrsf_id,
-        subject=mensaje,
+        subject=mensaje[:250] if mensaje else "Nueva respuesta del cliente",
+        mensaje=mensaje,
         tipo="Cliente",
         message_type="Respuesta",
         direccion="Entrante",
         canal="Portal",
-        status="Enviado"
+        status="Enviado",
+        autor_contacto_id=contact_id
     )
     db.add(new_comm)
     

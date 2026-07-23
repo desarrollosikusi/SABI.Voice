@@ -6,6 +6,7 @@ import SabiCompanion from '@/components/SabiCompanion';
 import Card from '@/components/ui/Card';
 import StatusBadge from '@/components/StatusBadge';
 import ConversationBubble from '@/components/ConversationBubble';
+import AttachmentsPanel from '@/components/AttachmentsPanel';
 import { useParams } from 'next/navigation';
 import { useToast } from '@/contexts/ToastContext';
 
@@ -158,6 +159,10 @@ export default function CustomerCaseDetail() {
             </p>
           </Card>
 
+          <div style={{ marginBottom: 40 }}>
+            <AttachmentsPanel data={pqrsf} onUploadComplete={fetchData} />
+          </div>
+
           {/* Timeline de Comunicaciones */}
           <div>
             <h3 style={{ marginBottom: 24, color: 'var(--text-primary)' }}>Línea de Tiempo</h3>
@@ -216,9 +221,9 @@ export default function CustomerCaseDetail() {
 
       {/* Caja de Respuesta Fija */}
       {pqrsf.estado_visible !== 'Cerrado' && (
-        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(10px)', borderTop: '1px solid var(--surface-border)', padding: '16px 0', zIndex: 50, boxShadow: '0 -4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
-          <div style={{ maxWidth: 1000, margin: '0 auto', padding: '0 20px' }}>
-            <form onSubmit={handleReply} style={{ display: 'flex', gap: 16, alignItems: 'flex-end' }}>
+        <div style={{ position: 'sticky', bottom: 0, margin: '40px -20px -120px -20px', backgroundColor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(10px)', borderTop: '1px solid var(--surface-border)', padding: '16px 20px', zIndex: 50, boxShadow: '0 -4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
+          <div style={{ maxWidth: 1000, margin: '0 auto' }}>
+            <form onSubmit={handleReply} style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
               <div style={{ flexGrow: 1 }}>
                 <textarea
                   value={replyMessage}
@@ -226,12 +231,12 @@ export default function CustomerCaseDetail() {
                   placeholder={pqrsf.responsable_actual === 'IKUSI' ? "Escribe tu actualización aquí..." : "Escribe tu respuesta aquí..."}
                   style={{
                     width: '100%',
-                    padding: 16,
+                    padding: '12px 16px',
                     borderRadius: 8,
                     backgroundColor: '#f8fafc',
                     border: '1px solid var(--surface-border)',
                     color: 'var(--text-primary)',
-                    minHeight: 80,
+                    minHeight: 60,
                     resize: 'none',
                     fontFamily: 'inherit'
                   }}
@@ -241,10 +246,10 @@ export default function CustomerCaseDetail() {
               <button 
                 type="submit" 
                 className="btn-primary"
-                style={{ alignSelf: 'center', padding: '16px 32px' }}
+                style={{ alignSelf: 'center', padding: '12px 24px', width: 'auto', whiteSpace: 'nowrap' }}
                 disabled={isSubmitting || !replyMessage.trim()}
               >
-                {isSubmitting ? 'Enviando...' : (pqrsf.responsable_actual === 'IKUSI' ? 'Enviar nueva actualización' : 'Enviar Respuesta')}
+                {isSubmitting ? 'Enviando...' : (pqrsf.responsable_actual === 'IKUSI' ? 'Enviar actualización' : 'Enviar Respuesta')}
               </button>
             </form>
           </div>

@@ -24,6 +24,7 @@ class PriorityResponse(PriorityBase):
         from_attributes = True
 
 class PqrsfTypeBase(CatalogBase):
+    code: Optional[str] = None
     plantilla_respuesta: Optional[str] = None
 
 class PqrsfTypeResponse(PqrsfTypeBase):
@@ -59,10 +60,24 @@ class UserBase(BaseModel):
     role: str = "Administrador"
     job_title: Optional[str] = None
     area_id: Optional[int] = None
+    phone: Optional[str] = None
+    avatar_url: Optional[str] = None
     is_active: bool = True
 
 class UserCreate(UserBase):
     password: str
+
+class UserPasswordUpdate(BaseModel):
+    current_password: str
+    new_password: str
+
+class UserUpdateAdmin(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    job_title: Optional[str] = None
+    phone: Optional[str] = None
+    role: Optional[str] = None
+    is_active: Optional[bool] = None
 
 class UserResponse(UserBase):
     id: int
@@ -93,6 +108,33 @@ class EconomicSectorBase(BaseModel):
     order_index: int = 0
 
 class EconomicSectorResponse(EconomicSectorBase):
+    id: int
+    class Config:
+        from_attributes = True
+
+class CaseCategoryBase(BaseModel):
+    code: str
+    sequence_prefix: Optional[str] = None
+    name: str
+    description: Optional[str] = None
+    color: str = "#000000"
+    icon: str = "Folder"
+    workflow_id: Optional[int] = None
+    form_schema: Optional[Any] = None
+    is_active: bool = True
+    display_order: int = 0
+
+class CaseCategoryResponse(CaseCategoryBase):
+    id: int
+    class Config:
+        from_attributes = True
+
+class CaseSourceBase(BaseModel):
+    code: str
+    name: str
+    is_active: bool = True
+
+class CaseSourceResponse(CaseSourceBase):
     id: int
     class Config:
         from_attributes = True
@@ -335,12 +377,20 @@ class ContactDeactivate(BaseModel):
     deactivation_reporter: str
     deactivation_support: str
 
+class CustomerBasic(BaseModel):
+    id: int
+    name: str
+    class Config:
+        from_attributes = True
+
 class ContactResponse(ContactBase):
     id: int
     functional_id: Optional[str] = None
     deactivation_reporter: Optional[str] = None
     deactivation_support: Optional[str] = None
     deactivation_date: Optional[datetime] = None
+    customer: Optional[CustomerBasic] = None
+    ultima_interaccion: Optional[datetime] = None
     class Config:
         from_attributes = True
 
@@ -428,12 +478,15 @@ class OrganizationalFindingResponse(OrganizationalFindingBase):
         from_attributes = True
 
 class PqrsfBase(BaseModel):
+    category_id: Optional[int] = None
+    source_id: Optional[int] = None
     customer_id: Optional[int] = None
     contact_id: Optional[int] = None
     cliente_empresa: Optional[str] = None
     correo: Optional[str] = None
     asunto: Optional[str] = None
     descripcion: Optional[str] = None
+    fecha_limite_sugerida: Optional[datetime] = None
     
     tipo_id: Optional[int] = None
     area_id: Optional[int] = None

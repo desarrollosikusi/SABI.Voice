@@ -34,7 +34,7 @@ export default function ConversationBubble({ isIkusi, senderName, date, message,
           backgroundColor: isIkusi ? '#f0fdf4' : '#eff6ff'
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
           <strong style={{ color: isIkusi ? '#059669' : '#1d4ed8', fontSize: '0.95rem' }}>
             {senderName}
           </strong>
@@ -43,7 +43,29 @@ export default function ConversationBubble({ isIkusi, senderName, date, message,
           </span>
         </div>
         <div style={{ color: 'var(--text-primary)', whiteSpace: 'pre-wrap', lineHeight: 1.6, fontSize: '0.95rem' }}>
-          {message}
+          {(() => {
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+            const regex = /\[([^\]]+)\]\(ATTACHMENT:(\d+):(\d+)\)/g;
+            const parts = [];
+            let lastIndex = 0;
+            let match;
+            while ((match = regex.exec(message)) !== null) {
+              if (match.index > lastIndex) {
+                parts.push(message.substring(lastIndex, match.index));
+              }
+              const url = `${API_URL}/pqrsf/${match[2]}/attachments/${match[3]}/download`;
+              parts.push(
+                <a key={match.index} href={url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', textDecoration: 'underline', fontWeight: 600 }}>
+                  {match[1]}
+                </a>
+              );
+              lastIndex = regex.lastIndex;
+            }
+            if (lastIndex < message.length) {
+              parts.push(message.substring(lastIndex));
+            }
+            return parts.length > 0 ? parts : message;
+          })()}
         </div>
       </Card>
     </div>

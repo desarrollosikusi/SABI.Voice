@@ -1,59 +1,50 @@
-import React, { ReactNode } from 'react';
+import React from 'react';
+import * as Icons from 'lucide-react';
 
-export interface EmptyStateProps {
-  icon?: ReactNode;
+type EmptyStateProps = {
   title: string;
   description?: string;
-  action?: ReactNode;
-  className?: string;
-  style?: React.CSSProperties;
-}
+  icon?: string;
+  action?: React.ReactNode;
+};
 
-const EmptyState: React.FC<EmptyStateProps> = ({
-  icon,
-  title,
-  description,
-  action,
-  className = '',
-  style,
-}) => {
+export default function EmptyState({ title, description, icon = 'Inbox', action }: EmptyStateProps) {
+  let IconComponent = (Icons as any)[icon] || Icons.Inbox;
+
   return (
-    <div
-      className={className}
-      style={{
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 'var(--space-2xl) var(--space-lg)',
+      textAlign: 'center',
+      backgroundColor: 'var(--surface-color)'
+    }}>
+      <div style={{
+        width: 64,
+        height: 64,
+        borderRadius: '50%',
+        backgroundColor: 'var(--surface-hover)',
         display: 'flex',
-        flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        textAlign: 'center',
-        padding: '48px 24px',
-        backgroundColor: 'var(--surface-color)',
-        borderRadius: 'var(--radius-lg)',
-        border: '1px dashed var(--surface-border)',
-        boxShadow: 'var(--shadow-sm)',
-        ...style,
-      }}
-    >
-      {icon && (
-        <div style={{ marginBottom: '16px', color: 'var(--text-secondary)', fontSize: '48px' }}>
-          {icon}
-        </div>
-      )}
-      <h3 style={{ margin: '0 0 8px', color: 'var(--text-primary)', fontSize: '18px', fontWeight: 600 }}>
+        marginBottom: 'var(--space-md)',
+        color: 'var(--text-disabled)'
+      }}>
+        <IconComponent size={32} />
+      </div>
+      <h3 className="text-subtitle" style={{ marginBottom: 'var(--space-xs)' }}>
         {title}
       </h3>
       {description && (
-        <p style={{ margin: '0 0 24px', color: 'var(--text-secondary)', fontSize: '14px', maxWidth: '400px' }}>
+        <p className="text-secondary" style={{ maxWidth: 400, marginBottom: 'var(--space-lg)', lineHeight: 1.5 }}>
           {description}
         </p>
       )}
       {action && (
-        <div>
-          {action}
-        </div>
+        <div>{action}</div>
       )}
     </div>
   );
-};
-
-export default EmptyState;
+}

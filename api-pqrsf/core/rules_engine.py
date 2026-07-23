@@ -96,7 +96,7 @@ class RuleExecutor:
             channel=payload.get("channel", "all"),
             entity_type=entity_type,
             entity_id=entity_id,
-            customer_id=getattr(entity_obj, 'cliente_id', getattr(entity_obj, 'id', None) if entity_type == 'customer' else None)
+            customer_id=getattr(entity_obj, 'customer_id', getattr(entity_obj, 'id', None) if entity_type == 'customer' else None)
         )
         self.publisher.publish(event_payload)
 

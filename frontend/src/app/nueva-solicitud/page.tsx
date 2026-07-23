@@ -44,7 +44,7 @@ export default function NuevaSolicitudPage() {
   const [me, setMe] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  const { toastSuccess, toastError, warning } = useToast();
+  const { success: toastSuccess, error: toastError, warning } = useToast();
 
   useEffect(() => {
     document.body.classList.add('light-theme');
@@ -193,7 +193,7 @@ export default function NuevaSolicitudPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedCustomer || !selectedContact) {
+    if (isInternalUser && (!selectedCustomer || !selectedContact)) {
       return warning("Debes seleccionar un Cliente y un Contacto válido.");
     }
     
@@ -202,16 +202,26 @@ export default function NuevaSolicitudPage() {
       const payload = { 
         ...formData, 
         ...aiData,
-        customer_id: selectedCustomer.id,
-        contact_id: selectedContact.id,
-        cliente_empresa: selectedCustomer.name,
-        correo: selectedContact.email
+        customer_id: selectedCustomer?.id || me?.customer_id,
+        contact_id: selectedContact?.id || me?.id,
+        cliente_empresa: selectedCustomer?.name || "Cliente Portal",
+        correo: selectedContact?.email || me?.email
       };
       const res = await api.createPqrsf(payload);
-      toastSuccess(`Solicitud creada exitosamente con número de radicado: ${res.consecutivo}`);
       
-      // Simulate file upload (Since API does not accept files during creation yet)
-      // If we had an endpoint for attachments, we would do it here.
+      // Subir archivos adjuntos
+      if (files.length > 0) {
+        for (const file of files) {
+          try {
+            await api.uploadAttachment(res.id, file);
+          } catch (uploadErr) {
+            console.error("Error subiendo archivo:", file.name, uploadErr);
+            warning(`El caso se creó, pero hubo un error al subir el archivo: ${file.name}`);
+          }
+        }
+      }
+
+      toastSuccess(`Solicitud creada exitosamente con número de radicado: ${res.consecutivo}`);
 
       setFormData({ asunto: '', descripcion: '' });
       setAiData({ tipo_id: '', area_id: '', arquitectura_id: '', prioridad_id: '', sentimiento_id: '', causa_probable_id: '', riesgo: '', impacto: '', accion_recomendada: '', resumen: '', area_responsable_id: '' });

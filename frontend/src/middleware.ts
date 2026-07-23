@@ -10,7 +10,7 @@ export function middleware(request: NextRequest) {
   // Si no hay token, redirigimos al login correspondiente
   if (!token) {
     console.log("Decisión: NextResponse.redirect() - Token no encontrado");
-    if (request.nextUrl.pathname.startsWith('/portal-cliente')) {
+    if (request.nextUrl.pathname.startsWith('/portal-cliente') || request.nextUrl.pathname.startsWith('/nueva-solicitud')) {
       return NextResponse.redirect(new URL('/portal-cliente/login', request.url));
     }
     return NextResponse.redirect(new URL('/login', request.url));

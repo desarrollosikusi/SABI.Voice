@@ -7,11 +7,17 @@ import Tabs from '@/components/ui/Tabs';
 import DataTable from '@/components/ui/DataTable';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
+import Modal from '@/components/ui/Modal';
+import UserProfileForm from '@/components/users/UserProfileForm';
+import { userService } from '@/services/userService';
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState('users');
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<any>(null);
 
   useEffect(() => {
     if (activeTab === 'users') {
@@ -31,20 +37,36 @@ export default function AdminPage() {
     }
   };
 
+  const handleEditUser = (user: any) => {
+    setEditingUser(user);
+    setIsModalOpen(true);
+  };
+
+  const handleSaveUser = async (data: any) => {
+    if (!editingUser) return;
+    await userService.updateUserAdmin(editingUser.id, data);
+    setIsModalOpen(false);
+    setEditingUser(null);
+    fetchUsers(); // Refresh list
+  };
+
   const userColumns = [
-    { key: 'full_name', label: 'Nombre Completo' },
+    { key: 'full_name', label: 'Nombre Completo', render: (u: any) => u.name || u.full_name },
     { key: 'email', label: 'Correo' },
     { 
       key: 'role', 
       label: 'Rol',
       render: (u: any) => (
-        <Badge variant={u.role === 'admin' ? 'danger' : 'info'}>{u.role}</Badge>
+        <Badge variant={u.role === 'Administrador' ? 'danger' : 'info'}>{u.role}</Badge>
       )
     },
     { key: 'is_active', label: 'Estado', render: (u: any) => (
       <Badge variant={u.is_active ? 'success' : 'neutral'}>
         {u.is_active ? 'Activo' : 'Inactivo'}
       </Badge>
+    )},
+    { key: 'actions', label: 'Acciones', render: (u: any) => (
+      <Button variant="secondary" onClick={() => handleEditUser(u)}>Editar</Button>
     )}
   ];
 
@@ -116,6 +138,21 @@ export default function AdminPage() {
           </Card>
         </div>
       </div>
+      
+      <Modal 
+        isOpen={isModalOpen} 
+        onClose={() => { setIsModalOpen(false); setEditingUser(null); }}
+        title="Editar Usuario"
+      >
+        {editingUser && (
+          <UserProfileForm 
+            user={editingUser} 
+            mode="editable" 
+            onSave={handleSaveUser}
+            onCancel={() => { setIsModalOpen(false); setEditingUser(null); }}
+          />
+        )}
+      </Modal>
     </div>
   );
 }

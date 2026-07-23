@@ -11,7 +11,7 @@ export const logout = async () => {
     await fetch(`${API_URL}/auth/logout`, { method: "POST", credentials: "include" });
   } catch(e) {}
   if (typeof window !== 'undefined') {
-    if (window.location.pathname.startsWith('/portal-cliente')) {
+    if (window.location.pathname.startsWith('/portal-cliente') || window.location.pathname.startsWith('/nueva-solicitud')) {
         window.location.href = '/portal-cliente/login';
     } else {
         window.location.href = '/login';
@@ -177,6 +177,18 @@ export const api = {
     return resp.json();
   },
 
+  uploadAttachment: async (pqrsfId: string | number, file: File, observation?: string) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    if (observation) {
+      formData.append("observacion", observation);
+    }
+    return await customFetch(`${API_URL}/pqrsf/${pqrsfId}/attachments`, {
+      method: 'POST',
+      body: formData
+    });
+  },
+
   classifyPqrsf: async (asunto: string, descripcion: string) => {
     const resp = await fetch(`${API_URL}/pqrsf/classify`, {
       method: "POST",
@@ -328,6 +340,18 @@ export const api = {
     const resp = await fetch(`${API_URL}/catalogs`, { credentials: "include" });
     if (!resp.ok) throw new Error("Failed to fetch catalogs");
     return resp.json();
+  },
+
+  getCaseCategories: async () => {
+    return await customFetch(`${API_URL}/catalogs/case-categories`, {
+      headers: getHeaders(),
+    });
+  },
+
+  getCaseSources: async () => {
+    return await customFetch(`${API_URL}/catalogs/case-sources`, {
+      headers: getHeaders(),
+    });
   },
 
   updatePqrsf: async (id: string | number, updateData: any) => {

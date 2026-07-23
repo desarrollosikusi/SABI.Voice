@@ -1,17 +1,17 @@
-/* SABI Voice - Unified Design System Variables */
+/* SABI Voice - Business Object Platform Design System */
 
 :root {
-  /* Color Palette - Light Theme (Default) */
-  --primary: #10b981; /* Ikusi Green */
-  --primary-hover: #059669;
+  /* Color Palette - Enterprise Light Theme */
+  --color-primary: #10b981; /* Ikusi Green */
+  --color-primary-hover: #059669;
   
-  --success: #10b981;
-  --warning: #f59e0b;
-  --danger: #ef4444;
-  --info: #3b82f6;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  --color-info: #3b82f6;
 
   /* Neutrals & Backgrounds */
-  --bg-color: #f8fafc;
+  --bg-color: #f8fafc; /* Lighter background for more breathing room */
   --surface-color: #ffffff;
   --surface-hover: #f1f5f9;
   --surface-border: #e2e8f0;
@@ -23,6 +23,10 @@
 
   /* Typography */
   --font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-title: 32px;
+  --font-subtitle: 18px;
+  --font-body: 15px; /* Slightly larger than 14 for readability */
+  --font-secondary: 13px;
   
   /* Radii */
   --radius-sm: 4px;
@@ -30,10 +34,18 @@
   --radius-lg: 12px;
   --radius-xl: 16px;
 
-  /* Shadows */
+  /* Spacing */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+
+  /* Shadows - Modern and subtle */
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.03);
 }
 
 /* Prepared for Future Dark Mode */
@@ -60,23 +72,7 @@ body {
   min-height: 100vh;
   display: flex;
   -webkit-font-smoothing: antialiased;
-}
-
-/* Legacy overrides for transition (will be removed as components are refactored) */
-.glass-panel {
-  background: var(--surface-color);
-  border: 1px solid var(--surface-border);
-  border-radius: var(--radius-lg);
-  padding: 24px;
-  box-shadow: var(--shadow-sm);
-}
-
-.saas-card {
-  background-color: var(--surface-color);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-  padding: 24px;
-  border: 1px solid var(--surface-border);
+  font-size: var(--font-body);
 }
 
 /* Base Inputs - Standardizing for the portal */
@@ -85,57 +81,83 @@ body {
   padding: 10px 14px;
   border: 1px solid var(--surface-border);
   border-radius: var(--radius-md);
-  font-size: 0.95rem;
+  font-size: var(--font-body);
   background-color: var(--surface-color);
   color: var(--text-primary);
   outline: none;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .input-field:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
 }
 
-/* Loading animations */
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.spinner {
-  animation: spin 1s linear infinite;
-}
-
-/* Login */
-.login-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  width: 100%;
-  min-height: 100vh;
-  background-color: var(--bg-color);
-}
-
-.login-form {
-  width: 100%;
-  max-width: 400px;
+/* Global Button Styles */
+button {
+  font-family: inherit;
+  font-size: var(--font-body);
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
 }
 
 .btn-primary {
-  width: 100%;
-  padding: 12px;
-  background-color: var(--primary);
+  background-color: var(--color-primary);
   color: white;
   border: none;
-  border-radius: var(--radius-md);
-  font-weight: 600;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: background-color 0.2s;
+  font-weight: 500;
+  box-shadow: var(--shadow-sm);
 }
 
 .btn-primary:hover {
-  background-color: var(--primary-hover);
+  background-color: var(--color-primary-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
 }
 
+.btn-secondary {
+  background-color: var(--surface-color);
+  color: var(--text-primary);
+  border: 1px solid var(--surface-border);
+  font-weight: 500;
+}
+
+.btn-secondary:hover {
+  background-color: var(--surface-hover);
+}
+
+/* Legacy Overrides */
+.saas-card {
+  background-color: var(--surface-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-lg);
+  border: 1px solid var(--surface-border);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: var(--radius-xl);
+  font-size: var(--font-secondary);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+/* Utilities */
+.text-title {
+  font-size: var(--font-title);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.text-subtitle {
+  font-size: var(--font-subtitle);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.text-secondary {
+  color: var(--text-secondary);
+}
