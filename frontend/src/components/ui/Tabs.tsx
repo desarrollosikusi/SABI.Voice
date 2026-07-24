@@ -10,12 +10,19 @@ export type TabItem = {
 };
 
 export type TabsProps = {
-  tabs: TabItem[];
-  activeTab: string;
+  tabs?: TabItem[];
+  activeTab?: string;
+  
+  // Legacy support for internal portal
+  options?: { value: string; label: string }[];
+  value?: string;
+  
   onChange: (tabId: string) => void;
 };
 
-export default function Tabs({ tabs, activeTab, onChange }: TabsProps) {
+export default function Tabs({ tabs, activeTab, options, value, onChange }: TabsProps) {
+  const finalTabs: TabItem[] = tabs || (options ? options.map(o => ({ id: o.value, label: o.label })) : []);
+  const finalActiveTab = activeTab || value || '';
   return (
     <div style={{ 
       display: 'flex', 
@@ -26,8 +33,8 @@ export default function Tabs({ tabs, activeTab, onChange }: TabsProps) {
       backgroundColor: 'var(--surface-color)',
       paddingTop: '16px'
     }}>
-      {tabs.map(tab => {
-        const isActive = activeTab === tab.id;
+      {finalTabs.map(tab => {
+        const isActive = finalActiveTab === tab.id;
         
         let IconComponent = null;
         if (tab.icon && (Icons as any)[tab.icon]) {

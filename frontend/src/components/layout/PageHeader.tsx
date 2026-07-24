@@ -2,7 +2,7 @@ import React from 'react';
 import Breadcrumb, { BreadcrumbItem } from './Breadcrumb';
 
 type PageHeaderProps = {
-  title: string;
+  title: React.ReactNode;
   description?: string;
   breadcrumbs?: BreadcrumbItem[];
   actions?: React.ReactNode;

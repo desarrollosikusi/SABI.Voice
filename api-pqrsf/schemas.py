@@ -769,3 +769,55 @@ class CustomerPqrsfDetailResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+class DocumentCategoryResponse(BaseModel):
+    id: int
+    code: Optional[str] = None
+    name: str
+    is_active: bool
+    display: Optional[dict] = Field(default=None, alias="ui_metadata")
+
+    class Config:
+        from_attributes = True
+        populate_by_name = True
+
+class BusinessDocumentCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    category_id: int
+    customer_id: int
+    tags: Optional[dict] = None
+    visibility: Optional[str] = "shared"
+    state: Optional[str] = "published"
+
+class BusinessDocumentResponse(BaseModel):
+    id: int
+    title: str
+    description: Optional[str] = None
+    category_id: int
+    customer_id: int
+    file_url: str
+    file_name: str
+    file_size: int
+    is_active: bool
+    version: str
+    current_version: Optional[str] = None
+    status: Optional[str] = None
+    parent_document_id: Optional[int] = None
+    expires_at: Optional[datetime] = None
+    owner_id: Optional[int] = None
+    visibility: str
+    state: str
+    tags: Optional[dict] = None
+    storage_provider: str
+    checksum: Optional[str] = None
+    mime_type: Optional[str] = None
+    created_by: int
+    updated_by: Optional[int] = None
+    created_at: datetime
+    updated_at: datetime
+    
+    category: Optional[DocumentCategoryResponse] = None
+
+    class Config:
+        from_attributes = True

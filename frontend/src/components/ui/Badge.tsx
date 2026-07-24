@@ -1,20 +1,24 @@
 import React from 'react';
 import * as Icons from 'lucide-react';
 
-export type BadgeVariant = 'solid' | 'subtle' | 'outline';
+export type BadgeVariant = 'solid' | 'subtle' | 'outline' | string;
 
 export type BadgeProps = {
-  children: React.ReactNode;
+  children?: React.ReactNode;
+  label?: string;
   color?: string;
   icon?: string;
+  background?: string;
   variant?: BadgeVariant;
   className?: string;
 };
 
 export default function Badge({ 
   children, 
+  label,
   color = 'var(--color-primary)', 
   icon, 
+  background,
   variant = 'subtle',
   className = ''
 }: BadgeProps) {
@@ -48,9 +52,9 @@ export default function Badge({
         // If it's a CSS variable, we can't easily append opacity without color-mix.
         // We'll use color-mix for modern support.
         return {
-          backgroundColor: color.startsWith('#') ? `${color}20` : `color-mix(in srgb, ${color} 15%, transparent)`,
+          backgroundColor: background || (color.startsWith('#') ? `${color}20` : `color-mix(in srgb, ${color} 15%, transparent)`),
           color: color,
-          border: `1px solid ${color.startsWith('#') ? `${color}40` : `color-mix(in srgb, ${color} 30%, transparent)`}`
+          border: background ? 'none' : `1px solid ${color.startsWith('#') ? `${color}40` : `color-mix(in srgb, ${color} 30%, transparent)`}`
         };
     }
   };
@@ -73,7 +77,7 @@ export default function Badge({
       }}
     >
       {IconComponent && <IconComponent size={14} color={variant === 'solid' ? '#ffffff' : color} />}
-      {children}
+      {children || label}
     </span>
   );
 }

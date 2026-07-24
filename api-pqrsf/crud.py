@@ -494,3 +494,60 @@ def create_customer_communication(db: Session, pqrsf_id: int, customer_id: int, 
     db.commit()
     db.refresh(new_comm)
     return new_comm
+
+# --- Documentos MVP ---
+
+def get_document_categories(db: Session, is_active: bool = True):
+    query = db.query(models.DocumentCategory)
+    if is_active:
+        query = query.filter(models.DocumentCategory.is_active == True)
+    return query.all()
+
+def get_documents(db: Session, customer_id: int = None, category_id: int = None, is_active: bool = True):
+    query = db.query(models.BusinessDocument)
+    if is_active:
+        query = query.filter(models.BusinessDocument.is_active == True)
+    if customer_id:
+        query = query.filter(models.BusinessDocument.customer_id == customer_id)
+    if category_id:
+        query = query.filter(models.BusinessDocument.category_id == category_id)
+    return query.order_by(models.BusinessDocument.created_at.desc()).all()
+
+def get_document_by_id(db: Session, document_id: int):
+    return db.query(models.BusinessDocument).filter(models.BusinessDocument.id == document_id).first()
+
+def create_document(
+    db: Session, 
+    document: schemas.BusinessDocumentCreate, 
+    file_url: str, 
+    file_name: str, 
+    file_size: int, 
+    created_by: int
+):
+    db_document = models.BusinessDocument(
+        title=document.title,
+        description=document.description,
+        category_id=document.category_id,
+        customer_id=document.customer_id,
+        file_url=file_url,
+        file_name=file_name,
+        file_size=file_size,
+        tags=document.tags,
+        visibility=document.visibility,
+        state=document.state,
+        created_by=created_by
+    )
+    db.add(db_document)
+    db.commit()
+    db.refresh(db_document)
+    return db_document
+
+def deactivate_document(db: Session, document_id: int, updated_by: int):
+    db_document = get_document_by_id(db, document_id)
+    if db_document:
+        db_document.is_active = False
+        db_document.updated_by = updated_by
+        db_document.updated_at = datetime.datetime.utcnow()
+        db.commit()
+        db.refresh(db_document)
+    return db_document

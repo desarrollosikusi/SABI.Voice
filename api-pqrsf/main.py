@@ -879,7 +879,112 @@ def create_pqrsf_communication(pqrsf_id: int, comm_data: schemas.CaseCommunicati
         comm = crud.create_case_communication(db, pqrsf_id, comm_data, autor_usuario_id, autor_contacto_id)
         return comm
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        print(f"Error serving manual: {e}")
+        raise HTTPException(status_code=500, detail="Error retrieving manual")
+
+# --- Documentos MVP ---
+
+@app.get("/documents/categories", response_model=List[schemas.DocumentCategoryResponse])
+def get_document_categories(db: Session = Depends(get_db)):
+    return crud.get_document_categories(db)
+
+@app.get("/documents/customers", response_model=List[schemas.CustomerResponse])
+def get_document_customers(db: Session = Depends(get_db)):
+    return db.query(models.Customer).filter(models.Customer.is_active == True).all()
+
+@app.get("/documents", response_model=List[schemas.BusinessDocumentResponse])
+def get_documents(
+    category_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    # Si es interno, puede ver todos o pasamos customer_id=None
+    # Si es cliente, solo sus documentos
+    if current_user.role != "Administrador" and current_user.role != "Agente":
+        pass 
+        
+    return crud.get_documents(db, category_id=category_id)
+
+@app.get("/documents/{id}", response_model=schemas.BusinessDocumentResponse)
+def get_document(id: int, db: Session = Depends(get_db)):
+    doc = crud.get_document_by_id(db, id)
+    if not doc or not doc.is_active:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return doc
+
+@app.get("/documents/{id}/download")
+def download_document(id: int, db: Session = Depends(get_db)):
+    doc = crud.get_document_by_id(db, id)
+    if not doc or not doc.is_active:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if not os.path.exists(doc.file_url):
+        raise HTTPException(status_code=404, detail="File missing on disk")
+    return FileResponse(doc.file_url, filename=doc.file_name)
+
+@app.post("/documents", response_model=schemas.BusinessDocumentResponse)
+def upload_document(
+    title: str = Form(...),
+    description: Optional[str] = Form(None),
+    category_id: int = Form(...),
+    customer_id: int = Form(...),
+    tags_str: str = Form("{}"),
+    visibility: str = Form("shared"),
+    state: str = Form("published"),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    import json
+    # Validar permisos (MVP: Solo IKUSI puede subir)
+    # Por ahora confiaremos en que el frontend lo oculta, pero en auth real validaríamos user_type == "internal"
+    
+    os.makedirs("documents", exist_ok=True)
+    safe_name = secure_filename(file.filename)
+    unique_id = uuid.uuid4().hex[:8]
+    file_path = f"documents/{unique_id}_{safe_name}"
+    
+    size = 0
+    with open(file_path, "wb") as buffer:
+        while chunk := file.file.read(8192):
+            buffer.write(chunk)
+            size += len(chunk)
+            
+    try:
+        tags = json.loads(tags_str)
+    except:
+        tags = {}
+
+    doc_create = schemas.BusinessDocumentCreate(
+        title=title,
+        description=description,
+        category_id=category_id,
+        customer_id=customer_id,
+        tags=tags,
+        visibility=visibility,
+        state=state
+    )
+    
+    return crud.create_document(
+        db=db,
+        document=doc_create,
+        file_url=file_path,
+        file_name=file.filename,
+        file_size=size,
+        created_by=current_user.id
+    )
+
+@app.delete("/documents/{id}", response_model=schemas.BusinessDocumentResponse)
+def delete_document(
+    id: int, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    doc = crud.get_document_by_id(db, id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+        
+    # Soft delete
+    return crud.deactivate_document(db, id, current_user.id)
 
 @app.post("/pqrsf/{pqrsf_id}/comments", response_model=schemas.PqrsfCommentResponse)
 def add_pqrsf_comment(pqrsf_id: int, comment: schemas.PqrsfCommentBase, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):

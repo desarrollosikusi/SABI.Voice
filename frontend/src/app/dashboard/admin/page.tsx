@@ -57,7 +57,7 @@ export default function AdminPage() {
       key: 'role', 
       label: 'Rol',
       render: (u: any) => (
-        <Badge variant={u.role === 'Administrador' ? 'danger' : 'info'}>{u.role}</Badge>
+        <Badge color={u.role === 'Administrador' ? 'var(--danger-color)' : 'var(--color-info)'}>{u.role}</Badge>
       )
     },
     { key: 'is_active', label: 'Estado', render: (u: any) => (

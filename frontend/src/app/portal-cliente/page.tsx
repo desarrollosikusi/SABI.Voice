@@ -50,9 +50,9 @@ export default function CustomerDashboard() {
   // KPI Filters logic
   const applyKpiFilter = (p: any) => {
     if (filterType === 'todos') return true;
-    if (filterType === 'mis_abiertos') return !p.estado_rel?.is_final;
-    if (filterType === 'esperando_ikusi') return !p.estado_rel?.is_final && !p.estado_rel?.sla_paused;
-    if (filterType === 'esperando_cliente') return !p.estado_rel?.is_final && p.estado_rel?.sla_paused;
+    if (filterType === 'mis_abiertos') return p.estado_visible !== 'Cerrado';
+    if (filterType === 'esperando_ikusi') return p.estado_visible !== 'Cerrado' && p.responsable_actual === 'IKUSI';
+    if (filterType === 'esperando_cliente') return p.estado_visible !== 'Cerrado' && p.responsable_actual === 'Cliente';
     return true;
   };
 
@@ -144,18 +144,25 @@ export default function CustomerDashboard() {
     {
       key: 'responsable',
       header: 'Responsable',
-      width: '140px',
-      cell: (item) => (
-        <span style={{ fontWeight: 500, color: item.responsable_actual === 'IKUSI' ? 'var(--color-info)' : 'var(--color-warning)' }}>
-          {item.responsable_actual}
-        </span>
-      )
+      width: '180px',
+      cell: (item) => {
+        const name = item.responsable?.name || 'Sin asignar';
+        return (
+          <span style={{ fontWeight: 500, color: name !== 'Sin asignar' ? 'var(--color-primary)' : 'var(--text-disabled)' }}>
+            {name}
+          </span>
+        );
+      }
     },
     {
       key: 'fecha',
       header: 'Última actualización',
       width: '180px',
-      cell: (item) => <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{new Date(item.fecha_ultima_actualizacion).toLocaleString()}</span>
+      cell: (item) => {
+        const dateStr = item.fecha_ultima_actualizacion || item.fecha_creacion;
+        const formattedDate = dateStr ? new Date(dateStr).toLocaleString() : 'N/A';
+        return <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{formattedDate}</span>;
+      }
     }
   ];
 

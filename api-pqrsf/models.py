@@ -545,3 +545,49 @@ class EventReceipt(Base):
 
     event = relationship("OperationalEvent", back_populates="receipts")
     user = relationship("User")
+
+class DocumentCategory(Base):
+    __tablename__ = "document_categories"
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(50), unique=True, nullable=True)
+    name = Column(String(100), nullable=False)
+    ui_metadata = Column(JSON, default={})
+    is_active = Column(Boolean, default=True)
+
+class BusinessDocument(Base):
+    __tablename__ = "business_documents"
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(200), nullable=False)
+    description = Column(String(500), nullable=True)
+    category_id = Column(Integer, ForeignKey("document_categories.id"), nullable=False)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
+    
+    # MVP fields
+    file_url = Column(String(500), nullable=False)
+    file_name = Column(String(255), nullable=False)
+    file_size = Column(Integer, nullable=False) # Size in bytes
+    is_active = Column(Boolean, default=True)
+    
+    # Future-proofing fields
+    version = Column(String(50), default="1.0")
+    current_version = Column(String(50), nullable=True)
+    status = Column(String(50), nullable=True)
+    parent_document_id = Column(Integer, ForeignKey("business_documents.id"), nullable=True)
+    expires_at = Column(DateTime, nullable=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    visibility = Column(String(50), default="shared") # internal, shared, public
+    state = Column(String(50), default="published") # draft, published, archived
+    tags = Column(JSON, nullable=True)
+    storage_provider = Column(String(50), default="local") # local, s3, azure
+    checksum = Column(String(255), nullable=True)
+    mime_type = Column(String(100), nullable=True)
+    
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    updated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    category = relationship("DocumentCategory")
+    customer = relationship("Customer")
+    creator = relationship("User", foreign_keys=[created_by])
+    updater = relationship("User", foreign_keys=[updated_by])

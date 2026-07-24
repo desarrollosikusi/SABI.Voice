@@ -98,11 +98,11 @@ export default function TicketWizard({ onClose, onSuccess }: Props) {
       )}
       
       {step === 2 && ticketType === 'PQRSF' && (
-        <InternalTicketForm catalogs={catalogs} categoryId={categoryId} category={catalogs.categories.find(c => c.id === categoryId)} onSubmit={handleSubmit} isSubmitting={isSubmitting} />
+        <InternalTicketForm catalogs={catalogs} categoryId={categoryId!} category={catalogs.categories.find(c => c.id === categoryId)} onSubmit={handleSubmit} isSubmitting={isSubmitting} />
       )}
 
       {step === 2 && ticketType === 'SOLICITUD_CLIENTE' && (
-        <CustomerTicketForm catalogs={catalogs} categoryId={categoryId} category={catalogs.categories.find(c => c.id === categoryId)} onSubmit={handleSubmit} isSubmitting={isSubmitting} />
+        <CustomerTicketForm catalogs={catalogs} categoryId={categoryId!} category={catalogs.categories.find(c => c.id === categoryId)} onSubmit={handleSubmit} isSubmitting={isSubmitting} />
       )}
     </div>
   );

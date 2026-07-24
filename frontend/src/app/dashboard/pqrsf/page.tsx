@@ -86,45 +86,45 @@ export default function PqrsfListPage() {
   });
 
   const columns = [
-    { key: 'id', label: 'ID' },
+    { key: 'id', header: 'ID', cell: (c: any) => c.id },
     { 
       key: 'categoria', 
-      label: 'Categoría', 
-      render: (c: any) => {
+      header: 'Categoría', 
+      cell: (c: any) => {
         const cat = categories.find(cat => cat.id === c.category_id) || {
           name: 'PQRSF',
           color: 'var(--success)',
           icon: 'FileText'
         };
         return (
-          <Badge variant="neutral" style={{ backgroundColor: cat.color ? `${cat.color}20` : 'rgba(34,197,94,0.1)', color: cat.color || 'var(--success)', borderColor: cat.color || 'var(--success)', display: 'inline-flex', alignItems: 'center', gap: '6px', width: 'fit-content', whiteSpace: 'nowrap' }}>
-            {renderIcon(cat.icon, 14, cat.color || 'currentColor')} <span>{cat.name}</span>
+          <Badge variant="subtle" color={cat.color || 'var(--color-success)'} icon={cat.icon}>
+            {cat.name}
           </Badge>
         );
       }
     },
-    { key: 'asunto', label: 'Asunto' },
-    { key: 'cliente', label: 'Cliente', render: (c: any) => c.cliente_empresa || '-' },
-    { key: 'area', label: 'Área Asignada', render: (c: any) => c.area_rel?.name || '-' },
+    { key: 'asunto', header: 'Asunto', cell: (c: any) => c.asunto },
+    { key: 'cliente', header: 'Cliente', cell: (c: any) => c.cliente_empresa || '-' },
+    { key: 'area', header: 'Área Asignada', cell: (c: any) => c.area_rel?.name || '-' },
     { 
       key: 'estado', 
-      label: 'Estado', 
-      render: (c: any) => {
+      header: 'Estado', 
+      cell: (c: any) => {
         const estado = c.estado_rel?.name || '-';
         return (
-          <Badge variant={estado === 'Registrado' || estado === 'En Asignación' ? 'warning' : estado === 'Cerrado' ? 'success' : 'neutral'}>
+          <Badge variant="subtle" color={estado === 'Registrado' || estado === 'En Asignación' ? 'var(--color-warning)' : estado === 'Cerrado' ? 'var(--color-success)' : 'var(--color-info)'}>
             {estado}
           </Badge>
         );
       }
     },
-    { key: 'fecha_creacion', label: 'Fecha Creado', render: (c: any) => new Date(c.fecha_creacion).toLocaleDateString() }
+    { key: 'fecha_creacion', header: 'Fecha Creado', cell: (c: any) => new Date(c.fecha_creacion).toLocaleDateString() }
   ];
 
   const tabOptions = [
-    { value: 'my_area', label: 'Tickets de mi Área' },
-    { value: 'mine', label: 'Mis Tickets Asignados' },
-    { value: 'all', label: 'Todos los Tickets' }
+    { id: 'my_area', label: 'Tickets de mi Área' },
+    { id: 'mine', label: 'Mis Tickets Asignados' },
+    { id: 'all', label: 'Todos los Tickets' }
   ];
 
   const [isWizardOpen, setIsWizardOpen] = useState(false);
@@ -142,9 +142,9 @@ export default function PqrsfListPage() {
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', alignItems: 'center', justifyContent: 'space-between' }}>
           
           <Tabs 
-            value={filterMode} 
+            activeTab={filterMode} 
             onChange={handleFilterChange} 
-            options={tabOptions} 
+            tabs={tabOptions} 
           />
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px', minWidth: '250px' }}>
@@ -168,6 +168,7 @@ export default function PqrsfListPage() {
           <DataTable 
             columns={columns}
             data={displayedCases}
+            keyExtractor={(item) => item.id}
             onRowClick={(row) => router.push(`/dashboard/pqrsf/${row.id}`)}
           />
         )}

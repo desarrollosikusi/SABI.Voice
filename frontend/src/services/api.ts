@@ -580,5 +580,38 @@ export const api = {
       method: 'PUT',
       headers: getHeaders()
     });
+  },
+
+  // Documentos MVP
+  getDocuments: async (filters: any = {}) => {
+    const params = new URLSearchParams();
+    if (filters.category_id) params.append('category_id', filters.category_id.toString());
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return await customFetch(`${API_URL}/documents${qs}`, { headers: getHeaders() });
+  },
+
+  getDocumentCategories: async () => {
+    return await customFetch(`${API_URL}/documents/categories`, { headers: getHeaders() });
+  },
+
+  getDocumentCustomers: async () => {
+    return await customFetch(`${API_URL}/documents/customers`, { headers: getHeaders() });
+  },
+
+  createDocument: async (formData: FormData) => {
+    // Para FormData NO incluimos Content-Type para que el navegador asigne el boundary
+    const headers = new Headers();
+    // customFetch merges headers, but we might need to rely on standard fetch or customFetch if it allows omitting.
+    return await customFetch(`${API_URL}/documents`, {
+      method: 'POST',
+      body: formData
+    });
+  },
+
+  deleteDocument: async (id: number) => {
+    return await customFetch(`${API_URL}/documents/${id}`, {
+      method: 'DELETE',
+      headers: getHeaders()
+    });
   }
 };

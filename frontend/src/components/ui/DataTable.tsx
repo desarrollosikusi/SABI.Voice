@@ -3,15 +3,17 @@ import { MoreVertical } from 'lucide-react';
 
 export type ColumnDef<T> = {
   key: string;
-  header: string;
+  header?: string;
+  label?: string; // Legacy
   width?: string;
-  cell: (item: T) => React.ReactNode;
+  cell?: (item: T) => React.ReactNode;
+  render?: (item: T) => React.ReactNode; // Legacy
 };
 
 export type DataTableProps<T> = {
   data: T[];
   columns: ColumnDef<T>[];
-  keyExtractor: (item: T) => string | number;
+  keyExtractor?: (item: T) => string | number; // Made optional for legacy support
   onRowClick?: (item: T) => void;
   // Future enterprise props
   sortable?: boolean;
@@ -19,13 +21,13 @@ export type DataTableProps<T> = {
   actions?: (item: T) => React.ReactNode;
 };
 
-export default function DataTable<T>({ 
+export default function DataTable({ 
   data, 
   columns, 
   keyExtractor, 
   onRowClick,
   actions
-}: DataTableProps<T>) {
+}: DataTableProps<any>) {
   return (
     <div style={{
       width: '100%',
@@ -46,6 +48,9 @@ export default function DataTable<T>({
           zIndex: 10
         }}>
           <tr>
+            {actions && (
+              <th style={{ padding: '16px 8px 16px 24px', width: '40px' }}></th>
+            )}
             {columns.map(col => (
               <th 
                 key={col.key}
@@ -59,18 +64,17 @@ export default function DataTable<T>({
                   width: col.width
                 }}
               >
-                {col.header}
+                {col.header || col.label}
               </th>
             ))}
-            {actions && (
-              <th style={{ padding: '16px 24px', width: '60px' }}></th>
-            )}
           </tr>
         </thead>
         <tbody>
-          {data.map((item, idx) => (
+          {data.map((item, idx) => {
+            const rowKey = keyExtractor ? keyExtractor(item) : (item as any).id || idx;
+            return (
             <tr 
-              key={keyExtractor(item)}
+              key={rowKey}
               onClick={() => onRowClick && onRowClick(item)}
               style={{
                 borderBottom: '1px solid var(--surface-border)',
@@ -85,6 +89,19 @@ export default function DataTable<T>({
                 e.currentTarget.style.backgroundColor = 'var(--surface-color)';
               }}
             >
+              {actions && (
+                <td style={{ padding: '16px 8px 16px 24px', width: '40px', verticalAlign: 'middle' }}>
+                  <div
+                    style={{ display: 'inline-flex', cursor: 'pointer' }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (onRowClick) onRowClick(item);
+                    }}
+                  >
+                    {actions(item)}
+                  </div>
+                </td>
+              )}
               {columns.map(col => (
                 <td 
                   key={col.key}
@@ -95,44 +112,15 @@ export default function DataTable<T>({
                     verticalAlign: 'middle'
                   }}
                 >
-                  {col.cell(item)}
+                  {col.cell ? col.cell(item) : (col.render ? col.render(item) : null)}
                 </td>
               ))}
-              {actions && (
-                <td style={{ padding: '16px 24px', textAlign: 'right' }}>
-                  <button 
-                    style={{
-                      background: 'transparent',
-                      border: 'none',
-                      color: 'var(--text-secondary)',
-                      cursor: 'pointer',
-                      padding: '4px',
-                      borderRadius: 'var(--radius-sm)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = 'var(--surface-border)';
-                      e.currentTarget.style.color = 'var(--text-primary)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = 'transparent';
-                      e.currentTarget.style.color = 'var(--text-secondary)';
-                    }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      // The real actions menu logic will go here
-                    }}
-                  >
-                    <MoreVertical size={18} />
-                  </button>
-                </td>
-              )}
             </tr>
-          ))}
+          );
+          })}
         </tbody>
       </table>
     </div>
   );
 }
+
